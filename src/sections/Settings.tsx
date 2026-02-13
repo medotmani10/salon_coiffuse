@@ -66,7 +66,7 @@ export default function SettingsPanel({ t, language, onLanguageChange, onSetting
   const [taxRate, setTaxRate] = useState(19);
   const [showNewUser, setShowNewUser] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
+
   const [savingHours, setSavingHours] = useState(false);
 
   useEffect(() => {
@@ -76,10 +76,8 @@ export default function SettingsPanel({ t, language, onLanguageChange, onSetting
   }, [activeTab]);
 
   const loadUsers = async () => {
-    setLoadingUsers(true);
     const { data } = await api.users.getAll();
     if (data) setUsers(data);
-    setLoadingUsers(false);
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {

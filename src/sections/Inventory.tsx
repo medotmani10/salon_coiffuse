@@ -68,30 +68,7 @@ interface Supplier {
   balance?: number;
 }
 
-interface PurchaseOrder {
-  id: string;
-  supplierId: string;
-  supplierName: string;
-  orderDate: Date;
-  expectedDate?: Date;
-  receivedDate?: Date;
-  status: 'pending' | 'ordered' | 'partial' | 'received' | 'cancelled';
-  items: PurchaseItem[];
-  subtotal: number;
-  tax: number;
-  total: number;
-  notes?: string;
-}
 
-interface PurchaseItem {
-  id: string;
-  productId: string;
-  productNameAr: string;
-  productNameFr: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-}
 
 // Mock data removed. Using API data.
 

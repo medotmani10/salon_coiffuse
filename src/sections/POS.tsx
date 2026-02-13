@@ -68,7 +68,6 @@ export default function POS({ language }: POSProps) {
   const [cashReceived, setCashReceived] = useState(0);
   const [amountPaid, setAmountPaid] = useState(0);
   const [discount, setDiscount] = useState(0);
-  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
 
   // Fetch Data
   useEffect(() => {
@@ -144,9 +143,7 @@ export default function POS({ language }: POSProps) {
     });
   };
 
-  const removeFromCart = (key: string) => {
-    setCart(prev => prev.filter(item => `${item.itemType}-${item.id}` !== key));
-  };
+
 
   const updateQuantity = (key: string, delta: number) => {
     setCart(prev => prev.map(item => {
@@ -163,9 +160,7 @@ export default function POS({ language }: POSProps) {
 
   // Calculations
   const subtotal = cartTotal;
-  const discountAmount = discountType === 'percentage'
-    ? subtotal * (discount / 100)
-    : discount;
+  const discountAmount = subtotal * (discount / 100);
   const afterDiscount = Math.max(0, subtotal - discountAmount);
   // Assuming tax is included or added? Let's say tax is 0 for simplicity or consistent with previous logic
   const tax = 0;

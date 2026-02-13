@@ -99,7 +99,7 @@ export default function Services({ t, language }: ServicesProps) {
 
     setCreating(true);
     try {
-      const { data, error } = await api.services.create({
+      const { data } = await api.services.create({
         nameAr: newServiceData.nameAr,
         nameFr: newServiceData.nameFr,
         category: newServiceData.category,
