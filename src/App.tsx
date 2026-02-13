@@ -47,6 +47,8 @@ import './App.css';
 
 type View = 'dashboard' | 'pos' | 'appointments' | 'clients' | 'services' | 'staff' | 'inventory' | 'reports' | 'settings';
 
+import { ChatWidget } from './components/ChatWidget';
+
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [language, setLanguage] = useState<Language>('fr');
@@ -424,7 +426,8 @@ function App() {
           </nav>
         </div>
       </div>
-    </div>
+      <ChatWidget />
+    </div >
   );
 }
 
