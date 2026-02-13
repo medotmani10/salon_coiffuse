@@ -1,5 +1,9 @@
-// import { supabase } from '@/lib/supabase';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { Client, Appointment, Alert } from '@/types';
+
+// Initialize Gemini
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || '');
+const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
 // Interface for AI responses
 export interface AiInsight {
@@ -54,50 +58,57 @@ export const aiService = {
 
     // Analyze a client's history to suggest services
     async analyzeClient(client: Client): Promise<AiInsight[]> {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        try {
+            const prompt = `
+                Analyze this salon client and provide 2-3 short, actionable insights/recommendations in JSON format.
+                Client: ${client.firstName} ${client.lastName}
+                Tier: ${client.tier}
+                Visits: ${client.visitCount}
+                Spent: ${client.totalSpent}
+                Last Visit: ${client.lastVisit}
 
-        // In a real implementation, we would call an Edge Function here
-        // const { data, error } = await supabase.functions.invoke('analyze-client', { body: { client } });
+                Output JSON array only:
+                [
+                    {
+                        "type": "recommendation" | "prediction" | "warning",
+                        "message": "Short text (max 15 words)",
+                        "confidence": 0.0-1.0,
+                        "action": "Short action label"
+                    }
+                ]
+            `;
 
-        const insights: AiInsight[] = [];
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            const text = response.text();
 
-        // Mock logic based on tier and spending
-        if (client.tier === 'platinum') {
-            insights.push({
-                type: 'recommendation',
-                message: 'High value client. Suggest booking the "Luxury Spa Package" for their next visit.',
-                confidence: 0.95,
-                action: 'Book Spa Package'
-            });
-        } else if (client.tier === 'bronze' && client.visitCount > 5) {
-            insights.push({
-                type: 'recommendation',
-                message: 'Loyal customer approaching Silver tier. Offer a 10% discount on next service to encourage upgrade.',
-                confidence: 0.85,
-                action: 'Offer Discount'
-            });
+            // Basic cleanup to parse JSON if model includes backticks
+            const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+            const insights = JSON.parse(jsonStr) as AiInsight[];
+
+            return insights;
+        } catch (error) {
+            console.error("Gemini AI Error:", error);
+            // Fallback to mock logic if AI fails
+            const insights: AiInsight[] = [];
+
+            if (client.tier === 'platinum') {
+                insights.push({
+                    type: 'recommendation',
+                    message: 'High value client. Suggest Luxury Spa Package.',
+                    confidence: 0.95,
+                    action: 'Book Spa'
+                });
+            } else if (client.tier === 'bronze' && client.visitCount > 5) {
+                insights.push({
+                    type: 'recommendation',
+                    message: 'Loyal customer. Offer 10% discount to upgrade.',
+                    confidence: 0.85,
+                    action: 'Offer Discount'
+                });
+            }
+            return insights;
         }
-
-        if (client.totalSpent > 50000) {
-            insights.push({
-                type: 'prediction',
-                message: 'Client likely to purchase retail products based on spending habits.',
-                confidence: 0.75,
-                action: 'Show Products'
-            });
-        }
-
-        // Generic fallback if no specific insights
-        if (insights.length === 0) {
-            insights.push({
-                type: 'recommendation',
-                message: 'Suggest rebooking their last service based on regular cycle.',
-                confidence: 0.60
-            });
-        }
-
-        return insights;
     },
 
     // Optimize schedule based on staff availability and demand
