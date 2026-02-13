@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 interface POSProps {
   t?: Localization;
@@ -351,7 +352,7 @@ export default function POS({ language }: POSProps) {
       </div>
 
       {/* Right Side - Cart */}
-      <div className="w-96 bg-white dark:bg-slate-800 rounded-2xl shadow-xl flex flex-col border border-slate-100 dark:border-slate-700">
+      <div className="hidden lg:flex w-96 bg-white dark:bg-slate-800 rounded-2xl shadow-xl flex-col border border-slate-100 dark:border-slate-700">
         {/* Cart Header */}
         <div className="p-6 border-b border-slate-100 dark:border-slate-700">
           <div className="flex items-center justify-between mb-6">
@@ -604,6 +605,131 @@ export default function POS({ language }: POSProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Mobile Cart Sheet - Reusing logic */}
+      <Sheet>
+        <SheetTrigger asChild>
+          <Button className="lg:hidden fixed bottom-20 left-4 right-4 h-14 rounded-xl shadow-2xl bg-slate-900 text-white z-40 flex items-center justify-between px-6 hover:bg-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-lg">
+                <ShoppingCart className="w-5 h-5" />
+              </div>
+              <span className="font-bold">{cart.length} {isRTL ? 'عناصر' : 'Items'}</span>
+            </div>
+            <span className="font-bold text-lg">{total.toLocaleString()} DZD</span>
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="bottom" className="h-[85vh] p-0 rounded-t-3xl border-t-0 flex flex-col">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Cart</SheetTitle>
+          </SheetHeader>
+
+          {/* Cart Header */}
+          <div className="p-6 border-b border-slate-100 dark:border-slate-700">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">
+                {isRTL ? 'السلة الحالية' : 'Panier Actuel'}
+              </h2>
+              <div className="flex items-center gap-2">
+                <span className="bg-rose-100 dark:bg-rose-900/30 text-rose-600 text-xs font-bold px-2 py-1 rounded-full">
+                  {cart.length} {isRTL ? 'عناصر' : 'articles'}
+                </span>
+                <Button variant="ghost" size="icon" onClick={() => setCart([])} disabled={cart.length === 0}>
+                  <Trash2 className="w-4 h-4 text-slate-400 hover:text-red-500" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Client Selector */}
+            <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl flex items-center gap-3">
+              <User className="w-5 h-5 text-slate-400" />
+              <select
+                className="bg-transparent border-none text-sm w-full focus:outline-none dark:text-white dark:bg-slate-900"
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+              >
+                <option value="">{language === 'ar' ? 'اختر عميل (اختياري)' : 'Choisir client (optionnel)'}</option>
+                {clients.map(client => (
+                  <option key={client.id} value={client.id}>
+                    {client.firstName} {client.lastName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Cart Items */}
+          <ScrollArea className="flex-1 p-6">
+            <div className="space-y-4">
+              {cart.map(item => {
+                const key = `${item.itemType}-${item.id}`;
+                return (
+                  <div key={key} className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center ${item.itemType === 'service' ? 'bg-purple-50 dark:bg-purple-900/30' : 'bg-slate-100 dark:bg-slate-700'}`}>
+                      <ShoppingCart className={`w-6 h-6 ${item.itemType === 'service' ? 'text-purple-400' : 'text-slate-400'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-slate-800 dark:text-slate-200 truncate">
+                        {isRTL ? item.nameAr : item.nameFr}
+                      </h4>
+                      <p className="text-sm text-rose-500 font-semibold">
+                        {item.price.toLocaleString()} DZD
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 rounded-lg p-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => updateQuantity(key, -1)}
+                      >
+                        <Minus className="w-3 h-3" />
+                      </Button>
+                      <span className="w-4 text-center text-sm font-medium">{item.quantity}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => updateQuantity(key, 1)}
+                      >
+                        <Plus className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+
+          {/* Footer */}
+          <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700">
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between text-slate-500">
+                <span>{isRTL ? 'المجموع الفرعي' : 'Sous-total'}</span>
+                <span>{subtotal.toLocaleString()} DZD</span>
+              </div>
+
+              <div className="flex justify-between text-xl font-bold text-slate-800 dark:text-slate-100 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <span>{isRTL ? 'المجموع' : 'Total'}</span>
+                <span>{total.toLocaleString()} DZD</span>
+              </div>
+            </div>
+
+            <Button
+              className="w-full h-12 bg-rose-500 hover:bg-rose-600 text-white rounded-xl shadow-lg shadow-rose-200 dark:shadow-none transition-all"
+              onClick={() => setShowCheckout(true)}
+              disabled={cart.length === 0 || processing}
+            >
+              {processing ? (
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              ) : (
+                <CreditCard className={`w-5 h-5 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+              )}
+              {isRTL ? 'إتمام الدفع' : 'Payer Maintenant'}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
