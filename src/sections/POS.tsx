@@ -288,8 +288,9 @@ export default function POS({ language }: POSProps) {
         </div>
 
         {/* Categories */}
-        <ScrollArea className="w-full whitespace-nowrap pb-2">
-          <div className="flex gap-2 px-1">
+        {/* Categories */}
+        <div className="w-full overflow-x-auto pb-2">
+          <div className="flex gap-2 px-1 min-w-max">
             {categories.map(category => (
               <Button
                 key={category.id}
@@ -304,7 +305,7 @@ export default function POS({ language }: POSProps) {
               </Button>
             ))}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Products Grid */}
         <ScrollArea className="flex-1">
