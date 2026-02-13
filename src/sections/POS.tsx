@@ -271,9 +271,9 @@ export default function POS({ language }: POSProps) {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex gap-6">
+    <div className="h-[calc(100vh-8rem)] flex gap-2 md:gap-6">
       {/* Left Side - Products */}
-      <div className="flex-1 flex flex-col gap-6">
+      <div className="flex-1 flex flex-col gap-4 md:gap-6 min-w-0">
         {/* Header & Search */}
         <div className="flex items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm">
           <div className="relative flex-1 max-w-md">
@@ -295,7 +295,7 @@ export default function POS({ language }: POSProps) {
                 key={category.id}
                 variant={selectedCategory === category.id ? "default" : "outline"}
                 onClick={() => setSelectedCategory(category.id)}
-                className={`rounded-full px-6 ${selectedCategory === category.id
+                className={`rounded-full px-4 md:px-6 text-xs md:text-sm ${selectedCategory === category.id
                   ? 'bg-rose-500 hover:bg-rose-600'
                   : 'border-slate-200 dark:border-slate-700'
                   }`}
