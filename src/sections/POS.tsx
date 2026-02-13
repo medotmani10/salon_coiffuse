@@ -313,16 +313,16 @@ export default function POS({ language }: POSProps) {
               <Loader2 className="w-8 h-8 animate-spin text-rose-500" />
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4 pb-4">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 pb-4">
               {filteredItems.map(item => (
                 <Card
                   key={`${item.itemType}-${item.id}`}
                   className={`cursor-pointer group hover:shadow-lg transition-all border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800 ${item.itemType === 'service' ? 'ring-1 ring-purple-200 dark:ring-purple-800' : ''}`}
                   onClick={() => item.stock > 0 && addToCart(item)}
                 >
-                  <CardContent className="p-3 md:p-4">
-                    <div className={`aspect-square rounded-lg mb-3 relative overflow-hidden flex items-center justify-center ${item.itemType === 'service' ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-300'}`}>
-                      <ShoppingCart className="w-6 h-6 md:w-8 md:h-8" />
+                  <CardContent className="p-2">
+                    <div className={`aspect-square rounded-lg mb-2 relative overflow-hidden flex items-center justify-center ${item.itemType === 'service' ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-300'}`}>
+                      <ShoppingCart className="w-5 h-5 md:w-6 md:h-6" />
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Plus className="w-8 h-8 text-white" />
                       </div>
@@ -332,14 +332,14 @@ export default function POS({ language }: POSProps) {
                         </span>
                       )}
                     </div>
-                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                    <h3 className="font-medium text-xs md:text-sm text-slate-800 dark:text-slate-200 truncate leading-tight">
                       {isRTL ? item.nameAr : item.nameFr}
                     </h3>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-rose-500 font-bold">{item.price.toLocaleString()} DZD</span>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-rose-500 font-bold text-xs md:text-sm">{item.price.toLocaleString()}</span>
                       {item.itemType === 'product' && (
-                        <span className={`text-xs ${item.stock > 0 ? 'text-slate-400' : 'text-red-500'}`}>
-                          {item.stock} {isRTL ? 'متوفر' : 'dispo'}
+                        <span className={`text-[10px] ${item.stock > 0 ? 'text-slate-400' : 'text-red-500'}`}>
+                          {item.stock}
                         </span>
                       )}
                     </div>
