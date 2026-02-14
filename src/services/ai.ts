@@ -109,38 +109,61 @@ export const aiService = {
         }
     },
 
-    // Chat with context (OpenRouter)
+    // Chat with context (OpenRouter + Memory)
     async chat(message: string, context: any): Promise<string> {
         try {
+            // 1. Fetch recent history for context
+            const { data: history } = await api.chat.getHistory(10);
+            const historyContext = history?.map((msg: any) =>
+                `${msg.role === 'user' ? 'Client' : 'Assistant'}: ${msg.content}`
+            ).join('\n') || '';
+
             const contextString = context ? JSON.stringify(context, null, 2) : "No context available.";
 
             const systemPrompt = `
-                You are a helpful AI assistant for a Salon Management App called "ZenStyle".
-                You have access to the following real-time business data:
+                Raki "Amina", partner w molat salon "ZenStyle" (You are Amina, partner and owner of ZenStyle).
+                
+                REAL-TIME DATA:
                 ${contextString}
 
-                Instructions:
-                1. **Persona**: You are a friendly, professional Algerian assistant.
-                2. **Language**: **ALWAYS speak in Algerian Darja** (Arabic dialect). Use French terms for technical words (like "shampoo", "coupe", "stock", "client") as is common in Algeria.
-                3. **Tone**: Helpful, concise, and respectful.
-                4. **Context**: Use the provided data to answer questions accurately. If you don't know, say "ما علاباليش" (I don't know).
+                PREVIOUS CHAT:
+                ${historyContext}
+
+                IDENTITY & RULES:
+                1. **Role**: You are a CO-OWNER, not just a bot. You care about profit, clients, and stock.
+                2. **Language**: **Algerian Darja ONLY**. Use French words for technical things (shampoo, brushing, stock, client, chiffre d'affaires).
+                3. **Tone**: 
+                   - Friendly but professional (Sadiqa wa "Pro").
+                   - Concise (Ma thdrch bzf). Don't give long lectures.
+                   - Intelligent (Fayqa).
+                   - **NEVER** say "How can I help you" or "I am here to help". You are chatting with your partner.
+                   - If stock is low, say it directly: "Chofi, shampooing raho -1, lazim ncommandiw."
+                4. **Memory**: Use the "PREVIOUS CHAT" to remember what we just talked about.
             `;
 
+            // 2. Save User Message
+            await api.chat.addMessage('user', message);
+
             const response = await openai.chat.completions.create({
-                model: "openai/gpt-4o-mini", // OpenRouter model ID
+                model: "openai/gpt-4o-mini",
                 messages: [
                     { role: "system", content: systemPrompt },
                     { role: "user", content: message }
                 ],
                 temperature: 0.7,
-                max_tokens: 1000,
+                max_tokens: 500, // Keep it short
             });
 
-            return response.choices[0]?.message?.content || "No response generated.";
+            const reply = response.choices[0]?.message?.content || "Ma 3labalich, khallini nchouf.";
+
+            // 3. Save Assistant Reply
+            await api.chat.addMessage('assistant', reply);
+
+            return reply;
 
         } catch (error) {
             console.error("OpenRouter Chat Error:", error);
-            return "Sorry, I'm having trouble connecting to the AI service right now.";
+            return "Désolé, rani nbuggi chwiya. (Connection Error)";
         }
     },
 

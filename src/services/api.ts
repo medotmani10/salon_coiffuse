@@ -1722,4 +1722,30 @@ export const api = {
         }
     },
 
+    chat: {
+        async getHistory(limit = 20): Promise<ApiResponse<any[]>> {
+            const { data, error } = await supabase
+                .from('chat_messages')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(limit);
+
+            if (error) return { data: null, error: error.message };
+            return { data: data ? data.reverse() : [], error: null };
+        },
+
+        async addMessage(role: 'user' | 'assistant', content: string): Promise<ApiResponse<any>> {
+            const { data, error } = await supabase
+                .from('chat_messages')
+                .insert([{ role, content }])
+                .select()
+                .single();
+
+            if (error) {
+                console.error("Error saving message:", error);
+                return { data: null, error: error.message };
+            }
+            return { data, error: null };
+        }
+    }
 };

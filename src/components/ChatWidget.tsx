@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { aiService } from '@/services/ai';
+import { api } from '@/services/api';
 
 interface Message {
     id: string;
@@ -32,6 +33,27 @@ export function ChatWidget() {
             scrollRef.current.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages, isOpen]);
+
+    // Load history on mount
+    useEffect(() => {
+        const loadHistory = async () => {
+            if (isOpen) {
+                setIsLoading(true);
+                const { data } = await api.chat.getHistory(50); // increased limit
+                if (data) {
+                    const mapped: Message[] = data.map((msg: any) => ({
+                        id: msg.id,
+                        role: msg.role,
+                        content: msg.content,
+                        timestamp: new Date(msg.created_at)
+                    }));
+                    setMessages(mapped);
+                }
+                setIsLoading(false);
+            }
+        };
+        loadHistory();
+    }, [isOpen]);
 
     const handleSend = async () => {
         if (!input.trim()) return;
@@ -96,10 +118,10 @@ export function ChatWidget() {
                             <Bot className="w-6 h-6" />
                         </div>
                         <div>
-                            <h3 className="font-bold text-lg">Salon AI Assistant</h3>
+                            <h3 className="font-bold text-lg">Amina (Partner)</h3>
                             <p className="text-xs text-rose-100 flex items-center gap-1">
                                 <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-                                Online • GPT-4o Mini
+                                Online
                             </p>
                         </div>
                     </div>
