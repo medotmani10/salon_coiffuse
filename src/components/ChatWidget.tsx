@@ -51,7 +51,7 @@ export function ChatWidget() {
             // 1. Gather Context
             const context = await aiService.gatherBusinessContext();
 
-            // 2. Send to Gemini
+            // 2. Send to AI
             const responseText = await aiService.chat(userMessage.content, context);
 
             const botMessage: Message = {
@@ -78,7 +78,7 @@ export function ChatWidget() {
 
     return (
         <>
-            {/* Floating Button */}
+            {/* ... (Floating Button) */}
             <Button
                 onClick={() => setIsOpen(!isOpen)}
                 className={`fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl z-50 transition-all duration-300 ${isOpen ? 'rotate-90 bg-slate-200 text-slate-800 hover:bg-slate-300' : 'bg-gradient-to-r from-rose-500 to-pink-600 text-white hover:scale-110'
@@ -99,7 +99,7 @@ export function ChatWidget() {
                             <h3 className="font-bold text-lg">Salon AI Assistant</h3>
                             <p className="text-xs text-rose-100 flex items-center gap-1">
                                 <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-                                Online • Gemini Pro
+                                Online • GPT-4o Mini
                             </p>
                         </div>
                     </div>
