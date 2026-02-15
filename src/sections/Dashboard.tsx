@@ -16,7 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { api } from '@/services/api';
-import { aiService } from '@/services/ai';
+import { amina, aiUtils } from '@/services/ai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -74,9 +74,19 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
       todayApps: stats.todayAppointments,
       occupancy: stats.occupancy
     };
-    const insight = await aiService.generateDailyInsight(context);
+    const insight = await amina.getInsight(context);
     if (insight) {
-      setAlerts(prev => [insight, ...prev]);
+      setAlerts(prev => [{
+        id: 'ai-insight-' + Date.now(),
+        type: 'info',
+        titleAr: 'نصيحة اليوم',
+        titleFr: 'Conseil du Jour',
+        messageAr: insight,
+        messageFr: insight, // Fallback for now
+        severity: 'info',
+        isRead: false,
+        createdAt: new Date()
+      }, ...prev]);
     }
     setIsGeneratingInsight(false);
   };
@@ -104,7 +114,7 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
       try {
         const [statsRes, alertsData] = await Promise.all([
           api.appointments.getStats(),
-          aiService.getDashboardAlerts()
+          aiUtils.getSmartAlerts()
         ]);
 
         if (statsRes.data) {

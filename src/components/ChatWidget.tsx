@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
-import { aiService } from '@/services/ai';
+import { amina, sarah } from '@/services/ai';
 import { api } from '@/services/api';
 
 interface Message {
@@ -70,11 +70,11 @@ export function ChatWidget() {
         setIsLoading(true);
 
         try {
-            // 1. Gather Context
-            const context = await aiService.gatherBusinessContext();
+            // 1. Gather Context (using amina for full business context)
+            const context = await amina.gatherBusinessContext();
 
-            // 2. Send to AI
-            const responseText = await aiService.chat(userMessage.content, context);
+            // 2. Send to AI (using sarah for client-facing chat)
+            const responseText = await sarah.chatWithClient(userMessage.content, context);
 
             const botMessage: Message = {
                 id: (Date.now() + 1).toString(),

@@ -27,7 +27,7 @@ import {
   Check
 } from 'lucide-react';
 import { api } from '@/services/api';
-import { aiService } from '@/services/ai';
+import { amina } from '@/services/ai';
 type AiInsight = { type: 'recommendation' | 'prediction' | 'warning'; message: string; confidence: number; action?: string; };
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -120,7 +120,7 @@ export default function Clients({ t, language }: ClientsProps) {
     setAnalyzing(true);
     setInsights([]); // Reset previous insights
     try {
-      const results = await aiService.analyzeClient(selectedClient);
+      const results = await amina.analyzeClient(selectedClient);
       setInsights(results);
     } catch (err) {
       console.error('AI Analysis failed', err);
