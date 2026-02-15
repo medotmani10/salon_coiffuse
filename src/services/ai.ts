@@ -404,7 +404,7 @@ export const amina = {
             });
 
             const analysis = response.choices[0]?.message?.content || "لا توجد توصيات حالياً.";
-            
+
             return [
                 {
                     type: 'recommendation',
@@ -419,9 +419,40 @@ export const amina = {
         }
     },
 
-    // 4. الدالة القديمة للحفاظ على التوافقية
-    async getOwnerInsight(context: any): Promise<string> {
-        return this.getInsight(context);
+    // 5. المحادثة مع الشريكة (Chat with Partner)
+    async chatWithPartner(message: string, context: any): Promise<string> {
+        const systemPrompt = `
+            أنتِ أمينة، الشريكة الاستراتيجية ومستشارة الأعمال لصالون ZenStyle.
+            الوصول: لديكِ رؤية كاملة لبيانات الصالون (المبيعات، المخزون، الموظفين، المواعيد).
+            السياق الحالي للصالون: ${JSON.stringify(context)}
+            
+            دورك:
+            1. تحليل الأداء واقتراح تحسينات.
+            2. الرد على استفسارات "المالكة" (User) بخصوص العمل.
+            3. التنبيه للمخاطر (نقص مخزون، تراجع مبيعات).
+            
+            الأسلوب:
+            - دارجة جزائرية مهنية ولكن ودودة ("يا لالة"، "شوفي..").
+            - كوني مختصرة ومفيدة.
+            - استخدمي الأرقام من السياق لدعم كلامك.
+            
+            مثال: "المبيعات اليوم ناقصة شوية (5000 دج)، بالاك لازم نديرو ستوري في انستغرام؟"
+        `;
+
+        try {
+            const response = await openai.chat.completions.create({
+                model: "openai/gpt-4o-mini",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: message }
+                ],
+                temperature: 0.7,
+            });
+            return response.choices[0]?.message?.content || "اسمحيلي لالة، راني نخمم، عاودي سؤالك.";
+        } catch (error) {
+            console.error("Amina Chat Error:", error);
+            return "كاين مشكل في الاتصال، دقيقة ونرجعلك.";
+        }
     }
 };
 
@@ -432,12 +463,12 @@ export const amina = {
 // الحفاظ على التوافقية مع الكود الحالي
 export const aiService = {
     gatherBusinessContext: amina.gatherBusinessContext,
-    chatWithClient: sarah.chatWithClient,
+    // [MODIFIED] Now uses Amina (Business Partner) instead of Sarah for In-App Chat
+    chatWithClient: amina.chatWithPartner,
     getOwnerInsight: amina.getInsight,
     getSmartAlerts: aiUtils.getSmartAlerts,
-    // دالة analyzeClient غير موجودة في الكود القديم، نضيفها لأمينة
     analyzeClient: amina.analyzeClient
 };
 
-// الحفاظ على التوافقية مع WhatsApp AI
+// الحفاظ على التوافقية مع WhatsApp AI (If still needed locally, otherwise relies on API/Webhook)
 export const whatsappAI = sarah;

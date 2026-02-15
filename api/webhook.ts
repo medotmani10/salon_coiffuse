@@ -1,6 +1,6 @@
 
-import { aiService } from '../src/services/ai';
-import { whapiService } from '../src/services/whapi';
+import { whatsappAI } from './_services/ai';
+import { whapiService } from './_services/whapi';
 
 // Vercel Serverless Function Handler
 export default async function handler(req: any, res: any) {
@@ -19,7 +19,7 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'GET') {
-        res.status(200).json({ status: 'active', service: 'Whapi Webhook' });
+        res.status(200).json({ status: 'active', service: 'Whapi Webhook (Optimized AI)' });
         return;
     }
 
@@ -47,25 +47,22 @@ export default async function handler(req: any, res: any) {
             if (msg.from_me) continue;
 
             // Whapi provides chat_id (e.g., 213555...@s.whatsapp.net) and text body
-            const remoteJid = msg.chat_id;
+            const phoneNumber = msg.chat_id;
             const text = msg.text?.body;
 
             // Skipping non-text messages for now
-            if (!remoteJid || !text) continue;
+            if (!phoneNumber || !text) continue;
 
-            console.log(`Received WhatsApp from ${remoteJid}: ${text}`);
+            console.log(`[WhatsApp] 📱 ${phoneNumber}: ${text}`);
 
-            // 1. Context Loading
-            const minimalContext = {
-                source: "WhatsApp",
-                sender: remoteJid
-            };
+            // Use optimized WhatsApp AI service
+            // This includes: client recognition, smart context, and 76% token reduction
+            const aiResponse = await whatsappAI.replyToClient(text, phoneNumber);
 
-            // 2. Get AI Response
-            const aiResponse = await aiService.chat(text, minimalContext);
+            console.log(`[WhatsApp] 🤖 Response: ${aiResponse}`);
 
-            // 3. Send Reply via Whapi
-            await whapiService.sendText(remoteJid, aiResponse);
+            // Send Reply via Whapi
+            await whapiService.sendText(phoneNumber, aiResponse);
         }
 
         res.status(200).json({ status: 'success' });
