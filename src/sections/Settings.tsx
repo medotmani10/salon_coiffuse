@@ -19,7 +19,10 @@ import {
   Bell,
   Mail,
   Smartphone,
-  Clock
+  Clock,
+  MessageSquare,
+  Copy,
+  ExternalLink
 } from 'lucide-react';
 import { api } from '@/services/api';
 // import { Badge } from '@/components/ui/badge';
@@ -68,6 +71,13 @@ export default function SettingsPanel({ t, language, onLanguageChange, onSetting
   const [users, setUsers] = useState<any[]>([]);
 
   const [savingHours, setSavingHours] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setWebhookUrl(`${window.location.origin}/api/webhook`);
+    }
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'security') {
@@ -167,6 +177,28 @@ export default function SettingsPanel({ t, language, onLanguageChange, onSetting
     setSavingStore(false);
   };
 
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetConfirmCode, setResetConfirmCode] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetDatabase = async () => {
+    if (resetConfirmCode !== 'DELETE') return;
+
+    setIsResetting(true);
+    const { error } = await api.settings.resetDatabase();
+    setIsResetting(false);
+
+    if (error) {
+      alert(language === 'ar' ? 'حدث خطأ أثناء إعادة التعيين' : 'Erreur lors de la réinitialisation');
+      console.error(error);
+    } else {
+      setResetConfirmOpen(false);
+      setResetConfirmCode('');
+      // Reload page to reflect changes
+      window.location.reload();
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -209,6 +241,10 @@ export default function SettingsPanel({ t, language, onLanguageChange, onSetting
           <TabsTrigger value="backup" className="flex items-center gap-2">
             <Database className="w-4 h-4" />
             <span className="hidden sm:inline">{t.backup}</span>
+          </TabsTrigger>
+          <TabsTrigger value="whatsapp" className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4" />
+            <span className="hidden sm:inline">WhatsApp</span>
           </TabsTrigger>
         </TabsList>
 
@@ -676,7 +712,104 @@ export default function SettingsPanel({ t, language, onLanguageChange, onSetting
               </div>
             </CardContent>
           </Card>
+
+          {/* Danger Zone */}
+          <Card className="border-2 border-red-100 dark:border-red-900/30 shadow-none bg-red-50/30 dark:bg-red-900/10">
+            <CardHeader>
+              <CardTitle className="text-red-600 dark:text-red-400">
+                {language === 'ar' ? 'منطقة الخطر' : 'Zone de Danger'}
+              </CardTitle>
+              <CardDescription className="text-red-500/80">
+                {language === 'ar' ? 'الإجراءات هنا غير قابلة للتراجع' : 'Les actions ici sont irréversibles'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div>
+                  <p className="font-medium text-slate-800 dark:text-slate-200">
+                    {language === 'ar' ? 'مسح جميع البيانات' : 'Effacer toutes les données'}
+                  </p>
+                  <p className="text-sm text-slate-500 max-w-md">
+                    {language === 'ar'
+                      ? 'سيتم حذف جميع الزبائن، المواعيد، المعاملات، والمخزون. ستبقى الإعدادات فقط.'
+                      : 'Cela supprimera tous les clients, rendez-vous, transactions et stocks. Seuls les paramètres resteront.'}
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={() => setResetConfirmOpen(true)}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {language === 'ar' ? 'إعادة ضبط المصنع' : 'Réinitialiser Données'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
+
+        {/* WhatsApp Settings */}
+        <TabsContent value="whatsapp" className="space-y-6">
+          <Card className="border-0 shadow-lg shadow-green-100/50 dark:shadow-slate-900/50 
+            bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-green-500" />
+                WhatsApp Integration (AppsLink.io)
+              </CardTitle>
+              <CardDescription>
+                {language === 'ar'
+                  ? 'اربط التطبيق مع واتساب للرد الآلي والحجز'
+                  : 'Connecter WhatsApp pour les réponses automatiques et la réservation'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                <h4 className="font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-2">
+                  <Globe className="w-4 h-4" />
+                  Webhook URL
+                </h4>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                  {language === 'ar'
+                    ? 'انسخ هذا الرابط وضعه في إعدادات Webhook في AppsLink'
+                    : 'Copiez cette URL et collez-la dans les paramètres Webhook de AppsLink'}
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-mono break-all">
+                    {webhookUrl || 'Loading...'}
+                  </code>
+                  <Button variant="outline" size="icon" onClick={() => {
+                    navigator.clipboard.writeText(webhookUrl);
+                    alert('Copied!');
+                  }}>
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-medium">Setup Instructions</h4>
+                <ol className="list-decimal list-inside space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                  <li>Go to <a href="https://app.appslink.io" target="_blank" className="text-blue-500 hover:underline">AppsLink Dashboard</a>.</li>
+                  <li>Click on your Instance.</li>
+                  <li>Go to <strong>Webhook Settings</strong>.</li>
+                  <li>Paste the URL above into the <strong>Webhook URL</strong> field.</li>
+                  <li>Enable <strong>MESSAGES_UPSERT</strong> or <strong>MESSAGES_SET</strong>.</li>
+                  <li>Click <strong>Save</strong>.</li>
+                </ol>
+              </div>
+
+              <div className="flex justify-end">
+                <Button className="bg-green-600 hover:bg-green-700 text-white">
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open AppsLink
+                </Button>
+              </div>
+
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* Working Hours Settings */}
         <TabsContent value="hours" className="space-y-6">
           <Card className="border-0 shadow-lg shadow-rose-100/50 dark:shadow-slate-900/50 
@@ -791,7 +924,53 @@ export default function SettingsPanel({ t, language, onLanguageChange, onSetting
             </div>
           </div>
         </DialogContent>
+
       </Dialog>
-    </div>
+
+      {/* Reset Confirmation Dialog */}
+      <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
+        <DialogContent className="sm:max-w-md border-red-200">
+          <DialogHeader>
+            <DialogTitle className={`flex items-center gap-2 text-red-600 ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+              <Shield className="w-5 h-5" />
+              {language === 'ar' ? 'تأكيد الحذف النهائي' : 'Confirmation de Suppression'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm text-red-800 dark:text-red-200">
+              {language === 'ar'
+                ? 'تحذير: هذا الإجراء سيقوم بمسح قاعدة البيانات بالكامل ولا يمكن التراجع عنه. هل أنت متأكد؟'
+                : 'Attention: Cette action effacera toute la base de données et est irréversible. Êtes-vous sûr ?'}
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                {language === 'ar' ? 'اكتب "DELETE" للتأكيد' : 'Écrivez "DELETE" pour confirmer'}
+              </label>
+              <Input
+                value={resetConfirmCode}
+                onChange={(e) => setResetConfirmCode(e.target.value)}
+                placeholder="DELETE"
+                className="border-red-200 focus-visible:ring-red-500"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => setResetConfirmOpen(false)}>
+                {t.cancel}
+              </Button>
+              <Button
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                disabled={resetConfirmCode !== 'DELETE' || isResetting}
+                onClick={handleResetDatabase}
+              >
+                {isResetting
+                  ? (language === 'ar' ? 'جاري المسح...' : 'Suppression...')
+                  : (language === 'ar' ? 'نعم، احذف كل شيء' : 'Oui, tout supprimer')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div >
   );
 }

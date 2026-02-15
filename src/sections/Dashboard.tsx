@@ -88,7 +88,7 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
             revenue: statsRes.data.totalRevenue,
             todayAppointments: statsRes.data.todayAppointments,
             activeCustomers: statsRes.data.totalClients,
-            occupancy: 78,
+            occupancy: statsRes.data.occupancy,
             weeklyData: statsRes.data.weeklyData,
             monthlyData: statsRes.data.monthlyData,
             serviceDistribution: statsRes.data.serviceDistribution,

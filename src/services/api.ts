@@ -253,6 +253,7 @@ export const api = {
             totalClients: number;
             totalRevenue: number;
             monthlyGrowth: number;
+            occupancy: number; // Added occupancy
             weeklyData: any[];
             monthlyData: any[];
             serviceDistribution: any[];
@@ -260,6 +261,7 @@ export const api = {
         }>> {
             const today = new Date();
             const todayStr = today.toISOString().split('T')[0];
+            const dayName = today.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase(); // e.g., 'saturday'
 
             // Parallel fetch for basic stats
             const [
@@ -268,19 +270,48 @@ export const api = {
                 { data: apptRevenueData, error: apptRevenueError },
                 { data: txRevenueData, error: txRevenueError },
                 { data: recentAppts, error: recentApptsError },
-                { data: recentTxs, error: recentTxsError }
+                { data: recentTxs, error: recentTxsError },
+                { data: workingHoursData },
+                { count: staffCount },
+                { data: todayApptsDetails }
             ] = await Promise.all([
                 supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('date', todayStr).neq('status', 'cancelled'),
                 supabase.from('clients').select('*', { count: 'exact', head: true }),
                 supabase.from('appointments').select('total_amount').neq('status', 'cancelled'),
                 supabase.from('transactions').select('total').eq('payment_status', 'paid'),
                 supabase.from('appointments').select('*, clients(first_name, last_name)').order('created_at', { ascending: false }).limit(5),
-                supabase.from('transactions').select('*, clients(first_name, last_name)').order('created_at', { ascending: false }).limit(5)
+                supabase.from('transactions').select('*, clients(first_name, last_name)').order('created_at', { ascending: false }).limit(5),
+                supabase.from('app_settings').select('value').eq('key', 'working_hours').single(),
+                supabase.from('staff').select('*', { count: 'exact', head: true }).eq('is_active', true),
+                supabase.from('appointments').select('start_time, end_time').eq('date', todayStr).neq('status', 'cancelled')
             ]);
 
             if (todayError || clientError || apptRevenueError || txRevenueError || recentApptsError || recentTxsError) {
                 return { data: null, error: 'Failed to fetch initial stats' };
             }
+
+            // --- Occupancy Calculation ---
+            let occupancy = 0;
+            if (workingHoursData?.value && staffCount && todayApptsDetails) {
+                const hours = workingHoursData.value[dayName];
+                if (hours && hours.isOpen) {
+                    const openTime = parseInt(hours.open.split(':')[0]) * 60 + parseInt(hours.open.split(':')[1]);
+                    const closeTime = parseInt(hours.close.split(':')[0]) * 60 + parseInt(hours.close.split(':')[1]);
+                    const dailyMinutesPerStaff = closeTime - openTime;
+                    const totalCapacityMinutes = dailyMinutesPerStaff * staffCount;
+
+                    if (totalCapacityMinutes > 0) {
+                        const bookedMinutes = todayApptsDetails.reduce((acc: number, appt: any) => {
+                            const start = parseInt(appt.start_time.split(':')[0]) * 60 + parseInt(appt.start_time.split(':')[1]);
+                            const end = parseInt(appt.end_time.split(':')[0]) * 60 + parseInt(appt.end_time.split(':')[1]);
+                            return acc + (end - start);
+                        }, 0);
+
+                        occupancy = Math.round((bookedMinutes / totalCapacityMinutes) * 100);
+                    }
+                }
+            }
+
 
             const apptRevenue = apptRevenueData?.reduce((acc, curr) => acc + (curr.total_amount || 0), 0) || 0;
             const txRevenue = txRevenueData?.reduce((acc, curr) => acc + (Number(curr.total) || 0), 0) || 0;
@@ -428,6 +459,7 @@ export const api = {
                     totalClients: clientCount || 0,
                     totalRevenue,
                     monthlyGrowth: 0,
+                    occupancy, // Return calculated occupancy
                     weeklyData,
                     monthlyData,
                     serviceDistribution,
@@ -805,7 +837,13 @@ export const api = {
             if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
             if (updates.workingHours !== undefined) dbUpdates.working_hours = updates.workingHours;
 
-            const { data, error } = await supabase.from('staff').update(dbUpdates).eq('id', id).select().single();
+            const { data, error } = await supabase
+                .from('staff')
+                .update(dbUpdates)
+                .eq('id', id)
+                .select()
+                .single();
+
             if (error) return { data: null, error: error.message };
             return { data, error: null };
         },
@@ -1526,6 +1564,39 @@ export const api = {
         }
     },
 
+    expenses: {
+        async getAll(): Promise<ApiResponse<any[]>> {
+            const { data, error } = await supabase
+                .from('expenses')
+                .select('*')
+                .order('date', { ascending: false });
+
+            if (error) return { data: null, error: error.message };
+            return { data, error: null };
+        },
+
+        async create(expense: any): Promise<ApiResponse<any>> {
+            const { data, error } = await supabase
+                .from('expenses')
+                .insert(expense)
+                .select()
+                .single();
+
+            if (error) return { data: null, error: error.message };
+            return { data, error: null };
+        },
+
+        async delete(id: string): Promise<ApiResponse<boolean>> {
+            const { error } = await supabase
+                .from('expenses')
+                .delete()
+                .eq('id', id);
+
+            if (error) return { data: null, error: error.message };
+            return { data: true, error: null };
+        }
+    },
+
     settings: {
         async getStoreSettings(): Promise<ApiResponse<any>> {
             try {
@@ -1597,6 +1668,12 @@ export const api = {
             } catch (error: any) {
                 return { data: null, error: error.message };
             }
+        },
+
+        async resetDatabase(): Promise<ApiResponse<void>> {
+            const { error } = await supabase.rpc('reset_app_data');
+            if (error) return { data: null, error: error.message };
+            return { data: null, error: null };
         },
 
         async get(key: string): Promise<ApiResponse<any>> {
