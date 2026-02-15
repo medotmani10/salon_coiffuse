@@ -81,7 +81,7 @@ export const sarah = {
      * Token cost: 0 (database lookup only)
      */
     async identifyClient(phoneNumber: string): Promise<ClientProfile | null> {
-        const { data: client } = await api.whatsapp.findClientByPhone(phoneNumber);
+        const { data: client } = await (api as any).whatsapp.findClientByPhone(phoneNumber);
 
         if (!client) return null;
 
@@ -100,7 +100,7 @@ export const sarah = {
      */
     async getSmartContext(phoneNumber: string, client: ClientProfile | null): Promise<SmartContext> {
         // Get last 3 messages from session
-        const { data: recentMessages } = await api.whatsapp.getRecentMessages(phoneNumber);
+        const { data: recentMessages } = await (api as any).whatsapp.getRecentMessages(phoneNumber);
 
         return {
             clientName: client?.name,
@@ -117,14 +117,14 @@ export const sarah = {
     async replyToClient(message: string, phoneNumber: string): Promise<string> {
         try {
             // 1. Get or create session (database operation)
-            await api.whatsapp.getSession(phoneNumber);
+            await (api as any).whatsapp.getSession(phoneNumber);
 
             // 2. Identify client (0 tokens - database only)
             const client = await this.identifyClient(phoneNumber);
 
             // 3. Link client to session if found
             if (client) {
-                await api.whatsapp.linkClientToSession(phoneNumber, client.id);
+                await (api as any).whatsapp.linkClientToSession(phoneNumber, client.id);
             }
 
             // 4. Get smart context (~150 tokens instead of ~800)
@@ -159,8 +159,8 @@ export const sarah = {
             const reply = response.choices[0]?.message?.content || "دقيقة برك لالة نثبت ونرجعلك.";
 
             // 8. Save messages to session (last 3 only)
-            await api.whatsapp.updateMessages(phoneNumber, 'user', message);
-            await api.whatsapp.updateMessages(phoneNumber, 'assistant', reply);
+            await (api as any).whatsapp.updateMessages(phoneNumber, 'user', message);
+            await (api as any).whatsapp.updateMessages(phoneNumber, 'assistant', reply);
 
             return reply;
 
