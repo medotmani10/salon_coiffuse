@@ -1,6 +1,6 @@
 
 import OpenAI from 'openai';
-import { whatsapp } from './whatsapp';
+import { whatsapp } from './whatsapp.js';
 
 // Support both Vite (import.meta.env) and Node.js (process.env)
 const getEnv = (key: string) => {

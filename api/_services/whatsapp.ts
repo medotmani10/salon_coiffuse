@@ -1,5 +1,5 @@
 
-import { supabase } from './supabase';
+import { supabase } from './supabase.js';
 
 // Helper type for response
 type ApiResponse<T> = {

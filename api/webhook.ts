@@ -1,6 +1,6 @@
 
-import { whatsappAI } from './_services/ai';
-import { whapiService } from './_services/whapi';
+import { whatsappAI } from './_services/ai.js';
+import { whapiService } from './_services/whapi.js';
 
 // Vercel Serverless Function Handler
 export default async function handler(req: any, res: any) {
