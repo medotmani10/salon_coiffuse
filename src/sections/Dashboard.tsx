@@ -11,9 +11,12 @@ import {
   Target,
   ArrowUpRight,
   ArrowDownRight,
-  Loader2
+
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 import { api } from '@/services/api';
+import { aiService } from '@/services/ai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -62,6 +65,27 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
   const [revenueFilter, setRevenueFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+
+  const handleGenerateInsight = async () => {
+    setIsGeneratingInsight(true);
+    const context = {
+      revenue: stats.revenue,
+      todayApps: stats.todayAppointments,
+      occupancy: stats.occupancy
+    };
+    const insight = await aiService.generateDailyInsight(context);
+    if (insight) {
+      setAlerts(prev => [insight, ...prev]);
+    }
+    setIsGeneratingInsight(false);
+  };
+
+  const handleAlertClick = (alert: Alert) => {
+    if (alert.type === 'stock') onNavigate('inventory');
+    if (alert.type === 'appointment') onNavigate('appointments');
+    if (alert.type === 'info' || alert.type === 'goal') setIsRevenueDialogOpen(true);
+  };
 
   useEffect(() => {
     if (isRevenueDialogOpen) {
@@ -80,7 +104,7 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
       try {
         const [statsRes, alertsData] = await Promise.all([
           api.appointments.getStats(),
-          api.ai.getDashboardAlerts()
+          aiService.getDashboardAlerts()
         ]);
 
         if (statsRes.data) {
@@ -163,6 +187,7 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
       case 'stock': return Package;
       case 'appointment': return Crown;
       case 'goal': return Target;
+      case 'info': return Sparkles;
       default: return AlertTriangle;
     }
   };
@@ -171,7 +196,8 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
     switch (severity) {
       case 'error': return 'text-red-500 bg-red-50 dark:bg-red-900/20';
       case 'warning': return 'text-amber-500 bg-amber-50 dark:bg-amber-900/20';
-      case 'info': return 'text-blue-500 bg-blue-50 dark:bg-blue-900/20';
+
+      case 'info': return 'text-violet-500 bg-violet-50 dark:bg-violet-900/20';
       default: return 'text-slate-500 bg-slate-50 dark:bg-slate-900/20';
     }
   };
@@ -339,10 +365,22 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
         <Card className="border-0 shadow-lg shadow-rose-100/50 dark:shadow-slate-900/50 
           bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
           <CardHeader className={`flex flex-row items-center justify-between ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
-            <CardTitle className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+            <CardTitle className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
               {t.alerts}
+              <Badge className="bg-rose-500 text-white">{alerts.length}</Badge>
             </CardTitle>
-            <Badge className="bg-rose-500 text-white">{alerts.length}</Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleGenerateInsight}
+              disabled={isGeneratingInsight}
+              className="text-violet-500 hover:text-violet-600 hover:bg-violet-50"
+            >
+              {isGeneratingInsight ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              <span className="ml-2 hidden sm:inline">
+                {language === 'ar' ? 'تحليل ذكي' : 'Info IA'}
+              </span>
+            </Button>
           </CardHeader>
           <CardContent className="space-y-3">
             {alerts.map((alert) => {
@@ -352,9 +390,11 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
                   key={alert.id}
                   className={`flex items-start gap-3 p-3 rounded-xl ${getAlertColor(alert.severity)} 
                     transition-all hover:scale-[1.02] cursor-pointer`}
+                  onClick={() => handleAlertClick(alert)}
                 >
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
-                    ${alert.severity === 'warning' ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-blue-100 dark:bg-blue-900/30'}`}>
+                    ${alert.type === 'info' ? 'bg-violet-100 dark:bg-violet-900/30' :
+                      alert.severity === 'warning' ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-blue-100 dark:bg-blue-900/30'}`}>
                     <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-0">

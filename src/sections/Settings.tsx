@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Settings as SettingsIcon,
   Globe,
@@ -754,7 +755,7 @@ export default function SettingsPanel({ t, language, onLanguageChange, onSetting
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-green-500" />
-                WhatsApp Integration (AppsLink.io)
+                WhatsApp Integration (Whapi.cloud)
               </CardTitle>
               <CardDescription>
                 {language === 'ar'
@@ -771,8 +772,8 @@ export default function SettingsPanel({ t, language, onLanguageChange, onSetting
                 </h4>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
                   {language === 'ar'
-                    ? 'انسخ هذا الرابط وضعه في إعدادات Webhook في AppsLink'
-                    : 'Copiez cette URL et collez-la dans les paramètres Webhook de AppsLink'}
+                    ? 'انسخ هذا الرابط وضعه في إعدادات Webhook في Whapi.cloud'
+                    : 'Copiez cette URL et collez-la dans les paramètres Webhook de Whapi.cloud'}
                 </p>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-mono break-all">
@@ -780,7 +781,7 @@ export default function SettingsPanel({ t, language, onLanguageChange, onSetting
                   </code>
                   <Button variant="outline" size="icon" onClick={() => {
                     navigator.clipboard.writeText(webhookUrl);
-                    alert('Copied!');
+                    toast.success('Copied!');
                   }}>
                     <Copy className="w-4 h-4" />
                   </Button>
@@ -790,11 +791,11 @@ export default function SettingsPanel({ t, language, onLanguageChange, onSetting
               <div className="space-y-4">
                 <h4 className="font-medium">Setup Instructions</h4>
                 <ol className="list-decimal list-inside space-y-2 text-sm text-slate-600 dark:text-slate-400">
-                  <li>Go to <a href="https://app.appslink.io" target="_blank" className="text-blue-500 hover:underline">AppsLink Dashboard</a>.</li>
-                  <li>Click on your Instance.</li>
-                  <li>Go to <strong>Webhook Settings</strong>.</li>
+                  <li>Go to <a href="https://whapi.cloud" target="_blank" className="text-blue-500 hover:underline">Whapi Dashboard</a>.</li>
+                  <li>Click on your Channel/Instance.</li>
+                  <li>Go to <strong>Webhooks</strong> settings.</li>
                   <li>Paste the URL above into the <strong>Webhook URL</strong> field.</li>
-                  <li>Enable <strong>MESSAGES_UPSERT</strong> or <strong>MESSAGES_SET</strong>.</li>
+                  <li>Select <strong>messages</strong> (and others if needed) in events.</li>
                   <li>Click <strong>Save</strong>.</li>
                 </ol>
               </div>

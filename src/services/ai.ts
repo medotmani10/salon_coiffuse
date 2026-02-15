@@ -170,22 +170,107 @@ export const aiService = {
         }
     },
 
-    // Get dashboard alerts
-    async getDashboardAlerts(): Promise<Alert[]> {
-        await new Promise(resolve => setTimeout(resolve, 800));
-        return [
-            {
-                id: '1',
-                type: 'stock',
-                titleAr: 'مخزون منخفض',
-                titleFr: 'Stock Faible',
-                messageAr: 'منتج "شامبو الكيراتين" وصل للحد الأدنى',
-                messageFr: 'Produit "Shampooing Kératine" a atteint le minimum',
-                severity: 'warning',
+    // Generate daily insight using AI
+    async generateDailyInsight(context: any): Promise<Alert | null> {
+        try {
+            const systemPrompt = `
+                You are a helpful business assistant for a hair salon.
+                Based on the provided context (revenue, appointments, stock), generate ONE short, motivating, or actionable insight in ALGERIAN DARJA (Mix French/Arabic).
+                - IF revenue is good: "MashaAllah, l-youm khdamna bien! (Revenue: X)"
+                - IF low stock: "Attention, stock ta3 X rah na9es."
+                - IF busy: "C'est chargé l-youm, courage!"
+                - IF quiet: "L-hala raha calme, promo balak?"
+                Output JSON: { "titleAr": "...", "titleFr": "...", "messageAr": "...", "messageFr": "...", "type": "info" }
+            `;
+
+            const response = await openai.chat.completions.create({
+                model: "openai/gpt-4o-mini",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: JSON.stringify(context) }
+                ],
+                response_format: { type: "json_object" }
+            });
+
+            const content = response.choices[0]?.message?.content;
+            if (!content) return null;
+
+            const jsonStr = content.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(jsonStr);
+
+            return {
+                id: 'ai-insight-' + Date.now(),
+                type: 'info',
+                titleAr: parsed.titleAr || 'ملاحظة الذكاء الاصطناعي',
+                titleFr: parsed.titleFr || 'Note IA',
+                messageAr: parsed.messageAr,
+                messageFr: parsed.messageFr,
+                severity: 'info',
                 isRead: false,
-                createdAt: new Date(),
-            },
-        ];
+                createdAt: new Date()
+            };
+
+        } catch (e) {
+            console.error("AI Insight Error:", e);
+            return null;
+        }
+    },
+
+    // Get dashboard alerts (Real Data)
+    async getDashboardAlerts(): Promise<Alert[]> {
+        try {
+            const alerts: Alert[] = [];
+
+            // 1. Check Stock
+            const { data: products } = await api.products.getAll();
+            if (products) {
+                const lowStock = products.filter((p: any) => p.stock <= p.minStock);
+                lowStock.forEach((p: any) => {
+                    alerts.push({
+                        id: `stock-${p.id}`,
+                        type: 'stock',
+                        titleAr: 'مخزون منخفض',
+                        titleFr: 'Stock Faible',
+                        messageAr: `المنتج "${p.nameAr || p.nameFr}" وصل للحد الأدنى (${p.stock})`,
+                        messageFr: `Produit "${p.nameFr}" a atteint le minimum (${p.stock})`,
+                        severity: 'warning',
+                        isRead: false,
+                        createdAt: new Date()
+                    });
+                });
+            }
+
+            // 2. Check Pending Appointments
+            const { data: upcoming } = await api.appointments.getUpcoming();
+            if (upcoming) {
+                const pending = upcoming.filter(a => a.status === 'pending');
+                if (pending.length > 0) {
+                    alerts.push({
+                        id: 'pending-appts',
+                        type: 'appointment',
+                        titleAr: 'مواعيد في الانتظار',
+                        titleFr: 'Rendez-vous en attente',
+                        messageAr: `لديك ${pending.length} مواعيد تحتاج للتأكيد`,
+                        messageFr: `Vous avez ${pending.length} rendez-vous à confirmer`,
+                        severity: 'info',
+                        isRead: false,
+                        createdAt: new Date()
+                    });
+                }
+            }
+
+            // 3. AI Insight (Lightweight context)
+            if (products || upcoming) {
+                // Context for AI
+                // logic to call this.generateDailyInsight(context) could go here
+                // but let's keep it fast for now.
+            }
+
+            return alerts;
+        } catch (error) {
+            console.error("Alerts fetching error:", error);
+            return [];
+        }
     },
 
     // Analyze a client's history

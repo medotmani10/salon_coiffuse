@@ -1,15 +1,14 @@
 import { supabase } from '@/lib/supabase';
 import type { Client, Appointment, Staff, Service } from '@/types';
-import { aiService } from './ai';
+// aiService removed to avoid circular dependency. Import it directly.
 
 // Generic helper for responses
-type ApiResponse<T> = {
+export type ApiResponse<T> = {
     data: T | null;
     error: string | null;
 };
 
 export const api = {
-    ai: aiService,
     clients: {
         async getAll(): Promise<ApiResponse<Client[]>> {
             const { data, error } = await supabase

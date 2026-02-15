@@ -26,6 +26,12 @@ export const appsLinkService = {
                 })
             });
 
+            if (!response.ok) {
+                const text = await response.text();
+                console.error(`AppsLink API Error (${response.status}):`, text);
+                return { status: 'error', message: text };
+            }
+
             const data = await response.json();
             return data;
         } catch (error) {

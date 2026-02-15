@@ -128,6 +128,7 @@ export interface AppointmentService {
 }
 
 export type AppointmentStatus =
+  | 'pending'
   | 'confirmed'
   | 'in-progress'
   | 'completed'
@@ -192,7 +193,7 @@ export interface PayrollRecord {
 
 export interface Alert {
   id: string;
-  type: 'stock' | 'appointment' | 'goal' | 'system';
+  type: 'stock' | 'appointment' | 'goal' | 'system' | 'info';
   titleAr: string;
   titleFr: string;
   messageAr: string;
