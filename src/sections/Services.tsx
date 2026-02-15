@@ -62,6 +62,11 @@ const categoryLabels: Record<ServiceCategory, { ar: string; fr: string }> = {
   massage: { ar: 'المساج', fr: 'Massage' },
 };
 
+const getCategoryLabel = (category: string, lang: 'ar' | 'fr') => {
+  const labels = categoryLabels[category as ServiceCategory];
+  return labels ? labels[lang] : category;
+};
+
 export default function Services({ t, language }: ServicesProps) {
   const isRTL = language === 'ar';
   const [services, setServices] = useState<Service[]>([]);
@@ -229,7 +234,7 @@ export default function Services({ t, language }: ServicesProps) {
       {/* Services Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredServices.map((service) => {
-          const Icon = categoryIcons[service.category];
+          const Icon = categoryIcons[service.category] || Scissors;
           return (
             <Card
               key={service.id}
@@ -254,7 +259,7 @@ export default function Services({ t, language }: ServicesProps) {
                         {language === 'ar' ? service.nameAr : service.nameFr}
                       </h3>
                       <Badge variant="secondary" className="text-xs mt-1">
-                        {language === 'ar' ? categoryLabels[service.category].ar : categoryLabels[service.category].fr}
+                        {getCategoryLabel(service.category, language === 'ar' ? 'ar' : 'fr')}
                       </Badge>
                     </div>
                   </div>
