@@ -54,7 +54,7 @@ interface SmartContext {
     tier?: string;
     lastVisit?: string;
     visitCount?: number;
-    recentMessages?: Array<{ role: string; content: string }>;
+    recentMessages?: Array<{ role: string; content: string; timestamp?: string }>;
     conversationStage?: string;
     topicsDiscussed?: string[];
     bookingContext: BookingContext;
@@ -83,7 +83,7 @@ export const sarah = {
      */
     async getBookingContext(phoneNumber: string, client: ClientProfile | null): Promise<BookingContext> {
         const { data: context } = await whatsapp.getBookingContext(phoneNumber);
-        
+
         // If no context exists or it's empty, initialize it
         if (!context || Object.keys(context).length === 0) {
             const initialContext: BookingContext = {
@@ -109,7 +109,7 @@ export const sarah = {
      */
     detectIntent(message: string): 'greeting' | 'booking' | 'inquiry' | 'cancellation' | 'confirmation' | 'other' {
         const lowerMsg = message.toLowerCase();
-        
+
         if (/سلام|مرحبا|صباح|مساء|هاي|hey|hello/i.test(lowerMsg)) {
             return 'greeting';
         }
@@ -133,7 +133,7 @@ export const sarah = {
      */
     async extractBookingInfo(message: string, currentContext: BookingContext, services: any[]): Promise<Partial<BookingContext>> {
         const servicesList = services.map(s => `${s.name_ar} (${s.duration}دق, ${s.price}DA)`).join(', ');
-        
+
         const prompt = `
 أنتِ مساعد ذكي لصالون تجميل. حللي الرسالة التالية واستخرجي المعلومات المتعلقة بالحجز.
 
@@ -174,11 +174,11 @@ export const sarah = {
             const jsonMatch = content.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const extracted = JSON.parse(jsonMatch[0]);
-                
+
                 // Find service ID if service name provided
                 if (extracted.service && !extracted.serviceId) {
-                    const matchedService = services.find(s => 
-                        s.name_ar.includes(extracted.service) || 
+                    const matchedService = services.find(s =>
+                        s.name_ar.includes(extracted.service) ||
                         extracted.service.includes(s.name_ar)
                     );
                     if (matchedService) {
@@ -186,13 +186,13 @@ export const sarah = {
                         extracted.service = matchedService.name_ar;
                     }
                 }
-                
+
                 return extracted;
             }
         } catch (error) {
             console.error("Error extracting booking info:", error);
         }
-        
+
         return {};
     },
 
@@ -201,11 +201,11 @@ export const sarah = {
      */
     async getAndUpdateAvailableSlots(phoneNumber: string, context: BookingContext): Promise<string[]> {
         if (!context.date) return [];
-        
+
         const { data: slots } = await whatsapp.getAvailableSlots(context.date);
         context.availableSlots = slots || [];
         await this.updateBookingContext(phoneNumber, context);
-        
+
         return slots || [];
     },
 
@@ -244,7 +244,7 @@ export const sarah = {
 
         // Add booking context state
         prompt += `\n**حالة الحجز الحالية:** ${stage}\n`;
-        
+
         if (bookingContext.service) {
             prompt += `**الخدمة المختارة:** ${bookingContext.service}\n`;
         }
@@ -257,22 +257,22 @@ export const sarah = {
 
         // Stage-specific instructions
         prompt += `\n**تعليمات المرحلة الحالية (${stage}):**\n`;
-        
+
         switch (stage) {
             case 'greeting':
-                prompt += isFirstMessage 
+                prompt += isFirstMessage
                     ? `- رحبي بالزبونة بـ "وعليكم السلام" + اسمها لو تعرفيها\n- اطرحي سؤال مفتوح: "كيفاه نقدر نعاونك اليوم لالة؟"\n- لو طلبت حجز، انتقلي لجمع المعلومات\n`
                     : `- كملي المحادثة بشكل طبيعي\n- لو طلبت حجز، ابدئي بسؤال: "شنو هي الخدمة اللي تحبيها؟"\n`;
                 break;
-                
+
             case 'collecting_service':
                 prompt += `- اعرضي الخدمات المتاحة باختصار (قص الشعر، صبغة، عناية بالبشرة، مانيكير...)\n- استني رد الزبونة وتأكدي من الخدمة المطلوبة\n- مثال: "عندنا قص الشعر ب 500DA، الصبغة من 1500DA... شنو تحبي؟"\n`;
                 break;
-                
+
             case 'collecting_date':
                 prompt += `- اقترحي تواريخ محددة\n- مثال: "عندنا غدا (${this.getTomorrowDate()}) أو بعد غد (${this.getDayAfterTomorrowDate()})، واش يوم يناسبك؟"\n- استني تأكيد التاريخ\n`;
                 break;
-                
+
             case 'collecting_time':
                 const slots = bookingContext.availableSlots || [];
                 if (slots.length > 0) {
@@ -282,11 +282,11 @@ export const sarah = {
                     prompt += `- لا يوجد أوقات متاحة هذا اليوم\n- اقترحي يوم آخر\n`;
                 }
                 break;
-                
+
             case 'collecting_name':
                 prompt += `- اطلبي اسم الزبونة بأدب\n- مثال: "عفواً لالة، واش تقدري تعطيني اسمك باش نسجل ليك الموعد؟"\n- استني الاسم الكامل\n`;
                 break;
-                
+
             case 'confirming':
                 prompt += `- أكدي كل تفاصيل الحجز:\n`;
                 if (bookingContext.service) prompt += `  • الخدمة: ${bookingContext.service}\n`;
@@ -295,7 +295,7 @@ export const sarah = {
                 if (bookingContext.clientName) prompt += `  • الاسم: ${bookingContext.clientName}\n`;
                 prompt += `- اسألي: "هل التفاصيل صحيحة؟" أو "نأكد ليك الموعد؟"\n- استني تأكيد الزبونة\n`;
                 break;
-                
+
             case 'completed':
                 prompt += `- هني الزبونة وذكريها بالموعد\n- مثال: "تم تأكيد موعدك لالة ${bookingContext.clientName} يوم ${bookingContext.date} الساعة ${bookingContext.time} ✅"\n- أضيفي: "نستناك بفارغ الصبر! ✨"\n`;
                 break;
@@ -340,13 +340,13 @@ export const sarah = {
     async processBookingFlow(message: string, phoneNumber: string, context: SmartContext): Promise<{ reply: string; context: BookingContext }> {
         const bookingContext = context.bookingContext;
         const intent = this.detectIntent(message);
-        
+
         // Get services list
         const { data: services } = await whatsapp.getServices();
-        
+
         // Extract info from message
         const extractedInfo = await this.extractBookingInfo(message, bookingContext, services || []);
-        
+
         // Update context with extracted info
         if (extractedInfo.service && !bookingContext.service) {
             bookingContext.service = extractedInfo.service;
@@ -355,7 +355,7 @@ export const sarah = {
                 bookingContext.stage = 'collecting_date';
             }
         }
-        
+
         if (extractedInfo.date && !bookingContext.date) {
             bookingContext.date = extractedInfo.date;
             if (bookingContext.stage === 'collecting_date') {
@@ -364,7 +364,7 @@ export const sarah = {
                 await this.getAndUpdateAvailableSlots(phoneNumber, bookingContext);
             }
         }
-        
+
         if (extractedInfo.time && !bookingContext.time) {
             bookingContext.time = extractedInfo.time;
             if (bookingContext.stage === 'collecting_time') {
@@ -377,55 +377,58 @@ export const sarah = {
                 }
             }
         }
-        
+
         if (extractedInfo.clientName && !bookingContext.clientName) {
             bookingContext.clientName = extractedInfo.clientName;
             if (bookingContext.stage === 'collecting_name') {
                 bookingContext.stage = 'confirming';
             }
         }
-        
+
         // Handle confirmation
         if (intent === 'confirmation' && bookingContext.stage === 'confirming') {
             bookingContext.stage = 'completed';
             // Here you would actually create the appointment in database
         }
-        
+
         // Handle cancellation
         if (intent === 'cancellation') {
             bookingContext.stage = 'cancelled';
             await whatsapp.clearBookingContext(phoneNumber);
-            return { 
+            return {
                 reply: "تم إلغاء الحجز. لو تحبي تحجزي في وقت آخر، راني حاضرة 💕",
-                context: bookingContext 
+                context: bookingContext
             };
         }
-        
+
         // Save updated context
         await this.updateBookingContext(phoneNumber, bookingContext);
-        
+
         // Build prompt and get AI response
         const systemPrompt = this.buildEnhancedPrompt(context, message);
-        
+
         const messages: any[] = [{ role: "system", content: systemPrompt }];
-        
+
         if (context.recentMessages && context.recentMessages.length > 0) {
             context.recentMessages.forEach(msg => {
-                messages.push({ role: msg.role, content: msg.content });
+                // Ensure timestamp exists and format it
+                const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString('en-GB') : '';
+                const prefix = timestamp ? `[${timestamp}] ` : '';
+                messages.push({ role: msg.role, content: `${prefix}${msg.content}` });
             });
         }
-        
+
         messages.push({ role: "user", content: message });
-        
+
         const response = await openai.chat.completions.create({
             model: "openai/gpt-4o-mini",
             messages,
             temperature: 0.75,
             max_tokens: 250
         });
-        
+
         const reply = response.choices[0]?.message?.content || "دقيقة برك لالة نثبت ونرجعلك 💕";
-        
+
         return { reply, context: bookingContext };
     },
 
@@ -436,19 +439,19 @@ export const sarah = {
         try {
             // Ensure session exists
             await whatsapp.getSession(phoneNumber);
-            
+
             // Identify client
             const client = await this.identifyClient(phoneNumber);
             if (client) {
                 await whatsapp.linkClientToSession(phoneNumber, client.id);
             }
-            
+
             // Get booking context
             const bookingContext = await this.getBookingContext(phoneNumber, client);
-            
+
             // Get recent messages
             const { data: recentMessages } = await whatsapp.getRecentMessages(phoneNumber);
-            
+
             // Build smart context
             const smartContext: SmartContext = {
                 clientName: client?.name,
@@ -458,14 +461,14 @@ export const sarah = {
                 recentMessages: recentMessages || [],
                 bookingContext
             };
-            
+
             // Process booking flow and get reply
             const { reply } = await this.processBookingFlow(message, phoneNumber, smartContext);
-            
+
             // Save messages to session
             await whatsapp.updateMessages(phoneNumber, 'user', message);
             await whatsapp.updateMessages(phoneNumber, 'assistant', reply);
-            
+
             return reply;
 
         } catch (error) {

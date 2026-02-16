@@ -99,14 +99,14 @@ export const whatsapp = {
                 timestamp: new Date().toISOString()
             });
 
-            // Keep only last 3 messages
-            const lastThree = messages.slice(-3);
+            // Keep only last 20 messages
+            const last20 = messages.slice(-20);
 
             // Update session
             const { error } = await supabase
                 .from('whatsapp_sessions')
                 .update({
-                    last_messages: lastThree,
+                    last_messages: last20,
                     message_count: (session.message_count || 0) + 1,
                     last_interaction: new Date().toISOString()
                 })
