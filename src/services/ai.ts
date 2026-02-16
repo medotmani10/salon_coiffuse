@@ -263,7 +263,7 @@ export const sarah = {
      * [DEPRECATED] This function is for in-app chat which now uses Amina
      * Kept for compatibility but redirects to WhatsApp-specific responses
      */
-    async chatWithClient(message: string, context: any): Promise<string> {
+    async chatWithClient(_message: string, _context: any): Promise<string> {
         // This should not be called for in-app chat anymore
         // In-app chat now uses amina.chatWithPartner
         return "الرجاء استخدام amina للمحادثة داخل التطبيق.";
