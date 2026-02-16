@@ -68,6 +68,20 @@ interface ClientProfile {
     visitCount: number;
 }
 
+interface BookingContext {
+    stage: 'greeting' | 'collecting_service' | 'collecting_date' | 'collecting_time' | 'collecting_name' | 'confirming' | 'completed' | 'cancelled';
+    service?: string;
+    serviceId?: string;
+    date?: string;
+    time?: string;
+    staffPreference?: string;
+    clientName?: string;
+    lastQuestion?: string;
+    missingInfo?: string[];
+    availableSlots?: string[];
+    services?: any[];
+}
+
 interface SmartContext {
     clientName?: string;
     tier?: string;
@@ -76,6 +90,7 @@ interface SmartContext {
     recentMessages?: Array<{ role: string; content: string }>;
     conversationStage?: 'greeting' | 'inquiry' | 'booking' | 'confirmation' | 'closing';
     topicsDiscussed?: string[];
+    bookingContext?: BookingContext;
 }
 
 export const sarah = {
