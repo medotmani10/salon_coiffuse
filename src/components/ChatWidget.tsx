@@ -20,7 +20,7 @@ export function ChatWidget() {
         {
             id: '1',
             role: 'assistant',
-            content: 'مرحباً! أنا مساعدك الذكي. كيف يمكنني مساعدتك في إدارة الصالون اليوم؟\nBonjour! Je suis votre assistant IA. Comment puis-je vous aider à gérer le salon aujourd\'hui?',
+            content: 'مرحبا! أنا أمينة، شريكتك في الصالون 🤝',
             timestamp: new Date()
         }
     ]);
@@ -73,8 +73,8 @@ export function ChatWidget() {
             // 1. Gather Context (using amina for full business context)
             const context = await amina.gatherBusinessContext();
 
-            // 2. Send to AI (using sarah for client-facing chat)
-            const responseText = await sarah.chatWithClient(userMessage.content, context);
+            // 2. Send to AI (using amina for partner chat inside the app)
+            const responseText = await amina.chatWithPartner(userMessage.content, context);
 
             const botMessage: Message = {
                 id: (Date.now() + 1).toString(),

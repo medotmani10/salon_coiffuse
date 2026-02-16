@@ -54,11 +54,11 @@ export const aiUtils = {
 };
 
 // ==========================================
-// 🟢 سارة (Sarah) - موظفة الاستقبال الرقمية
+// 🟢 سارة (Sarah) - موظفة الاستقبال الرقمية للواتساب
 // ==========================================
-// الجمهور: الزبائن عبر WhatsApp
+// الجمهور: الزبائن عبر WhatsApp فقط
 // الصلاحيات: Read خدمات + أسعار + مواعيد
-// القيود: ❌ أرباح، ❌ تكاليف، ❌ رواتب
+// القيود: ❌ أرباح، ❌ تكاليف، ❌ رواتب، ❌ لا تتكلم داخل التطبيق
 
 interface ClientProfile {
     id: string;
@@ -72,13 +72,15 @@ interface SmartContext {
     clientName?: string;
     tier?: string;
     lastVisit?: string;
+    visitCount?: number;
     recentMessages?: Array<{ role: string; content: string }>;
+    conversationStage?: 'greeting' | 'inquiry' | 'booking' | 'confirmation' | 'closing';
+    topicsDiscussed?: string[];
 }
 
 export const sarah = {
     /**
      * Identify client from phone number
-     * Token cost: 0 (database lookup only)
      */
     async identifyClient(phoneNumber: string): Promise<ClientProfile | null> {
         const { data: client } = await (api as any).whatsapp.findClientByPhone(phoneNumber);
@@ -95,70 +97,80 @@ export const sarah = {
     },
 
     /**
-     * Get smart context based on message type
-     * Token reduction: 81% (from ~800 to ~150 tokens)
+     * Get smart context with conversation state tracking
      */
     async getSmartContext(phoneNumber: string, client: ClientProfile | null): Promise<SmartContext> {
-        // Get last 3 messages from session
         const { data: recentMessages } = await (api as any).whatsapp.getRecentMessages(phoneNumber);
+
+        // Analyze conversation stage based on message history
+        const messages = recentMessages || [];
+        let stage: SmartContext['conversationStage'] = 'greeting';
+        const topicsDiscussed: string[] = [];
+
+        if (messages.length > 0) {
+            const lastMessages = messages.slice(-5);
+            const content = lastMessages.map((m: any) => m.content.toLowerCase()).join(' ');
+
+            // Detect conversation stage
+            if (content.includes('حجز') || content.includes('موعد') || content.includes('وقت')) {
+                stage = content.includes('أكد') || content.includes('تمام') ? 'confirmation' : 'booking';
+            } else if (content.includes('سعر') || content.includes('بزاف') || content.includes('شحال')) {
+                stage = 'inquiry';
+            } else if (messages.length > 2) {
+                stage = 'closing';
+            }
+
+            // Track discussed topics to avoid repetition
+            if (content.includes('سعر')) topicsDiscussed.push('pricing');
+            if (content.includes('حجز') || content.includes('موعد')) topicsDiscussed.push('booking');
+            if (content.includes('خدمة') || content.includes('شنو عندكم')) topicsDiscussed.push('services');
+        }
 
         return {
             clientName: client?.name,
             tier: client?.tier,
             lastVisit: client?.lastVisit ? new Date(client.lastVisit).toLocaleDateString('ar-DZ') : undefined,
-            recentMessages: recentMessages?.slice(-2) // Only last 2 for context
+            visitCount: client?.visitCount,
+            recentMessages: messages?.slice(-3),
+            conversationStage: stage,
+            topicsDiscussed
         };
     },
 
     /**
-     * Main reply function - Optimized for minimal token usage
-     * Total reduction: 76% (from ~1500 to ~350 tokens)
+     * Main reply function for WhatsApp - Natural and non-repetitive
      */
     async replyToClient(message: string, phoneNumber: string): Promise<string> {
         try {
-            // 1. Get or create session (database operation)
             await (api as any).whatsapp.getSession(phoneNumber);
-
-            // 2. Identify client (0 tokens - database only)
             const client = await this.identifyClient(phoneNumber);
 
-            // 3. Link client to session if found
             if (client) {
                 await (api as any).whatsapp.linkClientToSession(phoneNumber, client.id);
             }
 
-            // 4. Get smart context (~150 tokens instead of ~800)
             const context = await this.getSmartContext(phoneNumber, client);
+            const systemPrompt = this.buildNaturalPrompt(context, message);
 
-            // 5. Build optimized system prompt (~100 tokens instead of ~300)
-            const systemPrompt = this.buildOptimizedPrompt(context);
+            const messages: any[] = [{ role: "system", content: systemPrompt }];
 
-            // 6. Prepare conversation messages
-            const messages: any[] = [
-                { role: "system", content: systemPrompt }
-            ];
-
-            // Add last 2 messages for context (only if exist)
             if (context.recentMessages && context.recentMessages.length > 0) {
                 context.recentMessages.forEach(msg => {
                     messages.push({ role: msg.role, content: msg.content });
                 });
             }
 
-            // Add current message
             messages.push({ role: "user", content: message });
 
-            // 7. Call AI with optimized context
             const response = await openai.chat.completions.create({
                 model: "openai/gpt-4o-mini",
                 messages,
-                temperature: 0.6,
-                max_tokens: 150 // Limit output tokens
+                temperature: 0.75,
+                max_tokens: 200
             });
 
-            const reply = response.choices[0]?.message?.content || "دقيقة برك لالة نثبت ونرجعلك.";
+            const reply = response.choices[0]?.message?.content || "دقيقة برك لالة نثبت ونرجعلك 💕";
 
-            // 8. Save messages to session (last 3 only)
             await (api as any).whatsapp.updateMessages(phoneNumber, 'user', message);
             await (api as any).whatsapp.updateMessages(phoneNumber, 'assistant', reply);
 
@@ -166,91 +178,99 @@ export const sarah = {
 
         } catch (error) {
             console.error("WhatsApp AI Error:", error);
-            return "راني نعاني من شوية مشاكل في الكونيكسيو، عاوديلي شوية برك.";
+            return "راني نعاني من شوية مشاكل في الكونيكسيو، عاوديلي شوية برك 🙏";
         }
     },
 
     /**
-     * Build optimized system prompt
-     * Reduced from ~300 tokens to ~100 tokens (66% reduction)
+     * Build natural, non-repetitive prompt for WhatsApp
      */
-    buildOptimizedPrompt(context: SmartContext): string {
-        const greeting = context.clientName
-            ? `الزبونة: ${context.clientName} (${context.tier || 'عميلة جديدة'})`
-            : 'زبونة جديدة';
-
-        const lastVisitInfo = context.lastVisit
-            ? `\nآخر زيارة: ${context.lastVisit}`
-            : '';
-
-        // Check if this is the first message (no recent messages)
+    buildNaturalPrompt(context: SmartContext, currentMessage: string): string {
         const isFirstMessage = !context.recentMessages || context.recentMessages.length === 0;
+        const stage = context.conversationStage || 'greeting';
+        const isReturningClient = context.visitCount && context.visitCount > 1;
 
-        // Build conversation context
-        let conversationContext = '';
-        if (!isFirstMessage && context.recentMessages) {
-            conversationContext = '\n\nالمحادثة السابقة:\n' +
-                context.recentMessages.map(msg =>
-                    `${msg.role === 'user' ? 'الزبونة' : 'أنتِ'}: ${msg.content}`
-                ).join('\n');
+        let prompt = `أنتِ سارة، موظفة استقبال ودودة في صالون ZenStyle. تكلمي مع الزبائن في الواتساب فقط.
+
+**شخصيتك:**
+- بنت بلاد مهذبة، تتكلم دارجة جزائرية ناعمة وطبيعية
+- تفهمي في خدمات الصالون وتعرفي تفاصيلها
+- ما تحبيش تعاودي نفس الكلام - كل رد يكون مختلف حسب السياق
+- تتكلمي كأنك بنت خالتهم، مريحة وعلى راحتهم
+
+**صلاحياتك:**
+- تعرفي الخدمات والأسعار والمواعيد المتاحة
+- تحجزي المواعيد وتأكديها
+- ❌ ممنوع: المبيعات، الأرباح، الرواتب، المخزون الداخلي
+
+`;
+
+        // Client context
+        if (context.clientName) {
+            prompt += `**الزبونة:** ${context.clientName}`;
+            if (isReturningClient) {
+                prompt += ` (زبونة قديمة وثقيلة، زارتنا ${context.visitCount} مرات)`;
+            }
+            prompt += '\n';
+            if (context.lastVisit) {
+                prompt += `**آخر زيارة:** من ${context.lastVisit}\n`;
+            }
+        } else {
+            prompt += `**الزبونة:** جديدة، خليها تحس بالترحيب\n`;
         }
 
-        return `أنتِ سارة، موظفة الاستقبال الرقمية لصالون ZenStyle.
-الوصول: مسموح لكِ بمراجعة قائمة الخدمات، الأسعار، والمواعيد المتاحة.
-المهام: الإجابة على الاستفسارات، حجز المواعيد الجديدة، وتأكيد الحجوزات.
-اللغة: دارجة جزائرية مهذبة جداً (بالحروف العربية).
-القيود: ممنوع الحديث في الأمور المالية أو إعطاء أرقام عن المبيعات.
+        // Conversation stage guidance
+        prompt += `\n**مرحلة المحادثة:** ${stage}\n`;
 
-${greeting}${lastVisitInfo}${conversationContext}
+        // Anti-repetition rules
+        prompt += `\n**قواعد مهمة لتجنب التكرار:**\n`;
+        if (isFirstMessage) {
+            prompt += `- الرسالة الأولى: رحبي بالزبونة بـ "السلام عليكم" + اسمها لو تعرفيها\n`;
+        } else {
+            prompt += `- المحادثة مستمرة: لا تقولي "السلام عليكم" مرة أخرى! كملي الحديث طبيعي\n`;
+        }
 
-القواعد المهمة:
-1. العربية فقط (دارجة جزائرية)
-2. ${isFirstMessage ? '⚠️ هذه الرسالة الأولى - ابدئي بـ "السلام عليكم لالة"' : '⚠️ المحادثة مستمرة - لا تقولي "السلام عليكم" مرة أخرى، فقط تابعي الحديث بشكل طبيعي'}
-3. كوني موجزة ومباشرة
-4. للحجز: اقترحي موعد
-5. للأسعار: أعطي السعر مباشرة
+        if (context.topicsDiscussed?.includes('pricing')) {
+            prompt += `- تم ذكر الأسعار مسبقاً - ما تحكيش على الأسعار إلا لو سألت صراحة\n`;
+        }
+        if (context.topicsDiscussed?.includes('services')) {
+            prompt += `- تم عرض الخدمات مسبقاً - ركزي على التفاصيل الجديدة فقط\n`;
+        }
 
-اجيبي باختصار وطبيعي.`;
+        // Current message context
+        prompt += `\n**رسالتها الحالية:** "${currentMessage}"\n`;
+
+        // Response style based on stage
+        prompt += `\n**أسلوب الرد:**\n`;
+        if (stage === 'greeting') {
+            prompt += `- رحبي وعرضي مساعدة بسيطة\n- مثال: "وعليكم السلام لالة [الاسم]! كيفاه نقدر نعاونك اليوم؟"\n`;
+        } else if (stage === 'inquiry') {
+            prompt += `- جاوبي مباشرة وباختصار\n- لو سألت على السعر: قولي السعر + وقت الخدمة\n- لو سألت على خدمة: وصفيها بكلمتين واقترحي الوقت المناسب\n`;
+        } else if (stage === 'booking') {
+            prompt += `- اقترحي موعدين محددين (مثلاً: "عندنا غدوة على 10 أو 3 العشية")\n- أكدي التفاصيل: اليوم + الساعة + الخدمة\n`;
+        } else if (stage === 'confirmation') {
+            prompt += `- أكدي الحجز برقم أو تفصيل واضح\n- ختمي بجملة طيبة عن الاستعداد لاستقبالها\n`;
+        } else {
+            prompt += `- كوني ودودة واختصارية\n- لو الحجز تم: "نستناك لالة ✨"\n- لو عندها سؤال تاني: جاوبي مباشرة\n`;
+        }
+
+        prompt += `\n**ردك الآن:**`;
+
+        return prompt;
     },
 
     /**
-     * وكيل "سارة" لخدمة الزبائن (تطوير منطق الدارجة)
+     * [DEPRECATED] This function is for in-app chat which now uses Amina
+     * Kept for compatibility but redirects to WhatsApp-specific responses
      */
     async chatWithClient(message: string, context: any): Promise<string> {
-        const systemPrompt = `
-            أنتِ "سارة"، موظفة الاستقبال الرقمية لصالون ZenStyle.
-            الوصول: مسموح لكِ بمراجعة قائمة الخدمات، الأسعار، والمواعيد المتاحة.
-            المهام: الإجابة على الاستفسارات، حجز المواعيد الجديدة، وتأكيد الحجوزات.
-            اللغة: دارجة جزائرية مهذبة جداً (بالحروف العربية).
-            القيود: ممنوع الحديث في الأمور المالية أو إعطاء أرقام عن المبيعات.
-
-            قواعد الرد:
-            1. اللغة: دارجة جزائرية بيضاء (مفهومة) وبالحروف العربية فقط.
-            2. السياق الحالي: ${JSON.stringify(context)}
-            3. إذا سألت الزبونة عن موعد: تحققي من المواعيد المتاحة واقترحي أقرب وقت.
-            4. إذا سألت عن السعر: أعطي السعر بدقة من قائمة الخدمات.
-            5. الأسلوب: ابدئي بـ "السلام عليكم لالة" وانتهي بـ "مرحبا بيك في صالوننا ✨".
-
-            مثال: "مرحبا بيك لالة، عندنا بلاص فارغة غدوة على الـ 2، تحبي نحجزهالك؟"
-        `;
-
-        try {
-            const response = await openai.chat.completions.create({
-                model: "openai/gpt-4o-mini",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: message }
-                ],
-                temperature: 0.6, // توازن بين الإبداع والدقة
-            });
-            return response.choices[0]?.message?.content || "دقيقة برك لالة نثبت ونرجعلك.";
-        } catch (error) {
-            return "راني نعاني من شوية مشاكل في الكونيكسيو، عاوديلي شوية برك.";
-        }
+        // This should not be called for in-app chat anymore
+        // In-app chat now uses amina.chatWithPartner
+        return "الرجاء استخدام amina للمحادثة داخل التطبيق.";
     },
 
     /**
-     * تجميع السياق المحدود للزبائن (خدمات، أسعار، مواعيد فقط)
+     * Gather limited context for clients (services, prices, appointments only)
      */
     async gatherClientContext(clientId?: string) {
         try {
@@ -262,10 +282,8 @@ ${greeting}${lastVisitInfo}${conversationContext}
                 api.appointments.getUpcoming()
             ]);
 
-            // معلومات الزبون الأساسية فقط إذا كان clientId موجود
             let clientInfo = null;
             if (clientId) {
-                // البحث عن العميل من بين جميع العملاء
                 const { data: clients } = await api.clients.getAll();
                 const client = clients?.find(c => c.id === clientId);
                 if (client) {
@@ -300,14 +318,16 @@ ${greeting}${lastVisitInfo}${conversationContext}
 };
 
 // ==========================================
-// 🔵 أمينة (Amina) - المستشارة الاستراتيجية
+// 🔵 أمينة (Amina) - الشريكة الاستراتيجية للتطبيق
 // ==========================================
-// الجمهور: صاحبة الصالون (Dashboard)
-// الصلاحيات: Read-Only لكل شيء
-// القيود: تتحدث فقط داخل التطبيق
+// الجمهور: صاحبة الصالون (داخل التطبيق فقط)
+// الصلاحيات: Read-Only لكل شيء (مبيعات، مصاريف، مخزون، أداء)
+// القيود: لا تتكلم مع الزبائن - فقط مع المالكة داخل التطبيق
 
 export const amina = {
-    // 1. تجميع السياق الكامل للمحل (Context Gathering)
+    /**
+     * Gather complete business context
+     */
     async gatherBusinessContext() {
         try {
             const [
@@ -355,46 +375,59 @@ export const amina = {
         }
     },
 
-    // 2. مستشار المالكة (AI Business Analyst) - تحليل عميق
+    /**
+     * Get business insight - Natural and actionable
+     */
     async getInsight(context: any): Promise<string> {
         const prompt = `
-            أنتِ أمينة، الصديقة المقربة والشريكة الاستراتيجية لصاحبة الصالون.
-            أنتِ لستِ موظفة، بل 'مخ' الإدارة.
-            الوصول: اطلاع كامل على المداخيل، المصاريف، كمية السلع، وأداء العمال.
-            المهام: تحليل البيانات، تقديم نصائح لتقليل التكاليف، والتحذير من المخاطر.
-            اللغة: دارجة جزائرية عملية وصريحة. خاطبي صاحبة المحل كشريكة.
-            القيود: تتحدثين فقط مع صاحبة الصالون داخل التطبيق.
-            أسلوبك: "يا لالة، شوفي واش خرجتلي الأرقام.."
-            مصطلحاتك: Chiffre d'affaires, Charges, Marge, Stock, Promo
+أنتِ أمينة، الشريكة والصديقة المقربة لصاحبة صالون ZenStyle.
+تكلمي معاها داخل التطبيق فقط، كأنك قاعدة معاها في الكافي تشربي قهوة وتنصحيها في عملها.
 
-            حلل هذه البيانات: ${JSON.stringify(context)}.
-            قدم نصيحة واحدة "واقعية" و "حادة" بالدارجة الجزائرية.
-            - إذا كان الدخل منخفض: اقترح "Promo" على خدمة معينة.
-            - إذا كان المخزون ناقص: حذر من ضياع الزبائن.
-            - إذا كان الضغط عالي: انصح بتوظيف أو تنظيم الوقت.
-        `;
+**شخصيتك:**
+- فاهمة في البزنس وعندك عين تشوف بها المشاكل قبل ما تقع
+- تتكلمي دارجة جزائرية عصرية وعقلانية
+- ما تحبيش تعاودي نفس النصيحة - كل مرة تشوفي حاجة جديدة
+- صريحة بس محترمة، تقولي الحقيقة بس بأسلوب بناتي
+
+**البيانات اللي عندك:** ${JSON.stringify(context)}
+
+**قواعد النصح:**
+1. ما تعاوديش نفس النصيحة اللي قلتيها قبل - شوفي حاجة جديدة في الأرقام
+2. لو المبيعات ناقصة: اقترحي promo أو حملة في ستوريات
+3. لو المخزون قريب يخلص: نبهيها بوقت كافي
+4. لو عاملة ماشية مليح: شجعيها
+5. استخدمي أرقام حقيقية من البيانات
+
+**ردك:** نصيحة واحدة واضحة، مباشرة، ومختصرة (3-4 سطور بس). لا تكرري "يا لالة" في كل جملة.
+`;
 
         const response = await openai.chat.completions.create({
             model: "openai/gpt-4o-mini",
-            messages: [{ role: "user", content: prompt }]
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.75
         });
         return response.choices[0]?.message?.content || "";
     },
 
-    // 3. تحليل الزبون (Client Analysis)
+    /**
+     * Analyze client - For business insights
+     */
     async analyzeClient(client: any): Promise<any[]> {
         const prompt = `
-            أنتِ أمينة، المستشارة الاستراتيجية لصالون ZenStyle.
-            لديكِ معلومات كاملة عن الزبون: ${JSON.stringify(client)}.
-            
-            قم بتحليل سلوك الزبون وتقديم توصيات:
-            1. إذا كان الزبون من الطبقة البرونزية: اقترح ترقيته عبر عروض خاصة.
-            2. إذا كان عدد الزيارات قليل: اقترح برنامج ولاء.
-            3. إذا كان مجموع الإنفاق مرتفع: اقترح خدمات متميزة.
-            4. إذا كان آخر زيارة قديمة: اقترح إعادة التواصل.
-            
-            أجب بالدارجة الجزائرية العملية مع مصطلحات تجارية.
-        `;
+أنتِ أمينة، الشريكة الاستراتيجية لصالون ZenStyle.
+عندك معلومات كاملة على الزبون: ${JSON.stringify(client)}.
+
+حللي سلوك الزبون وقدمي توصية واحدة فقط (مختصرة):
+1. لو برونزي: كيفاه نرقيه؟
+2. لو زياراته قليلة: شنو نعملو باش يرجع؟
+3. لو ينفق بزاف: شنو نعرضلو من خدمات جديدة؟
+4. لو آخر زيارة قديمة: كيفاه نعاودو التواصل؟
+
+**قواعد:**
+- رد واحد مختصر (سطرين بس)
+- ما تعاوديش نفس التوصية اللي قلتيها في المرة اللي فاتت
+- استخدمي لغة بناتية عملية
+`;
 
         try {
             const response = await openai.chat.completions.create({
@@ -405,39 +438,49 @@ export const amina = {
 
             const analysis = response.choices[0]?.message?.content || "لا توجد توصيات حالياً.";
 
-            return [
-                {
-                    type: 'recommendation',
-                    message: analysis,
-                    confidence: 0.85,
-                    action: 'مراجعة برنامج الولاء'
-                }
-            ];
+            return [{
+                type: 'recommendation',
+                message: analysis,
+                confidence: 0.85,
+                action: 'مراجعة استراتيجية الزبون'
+            }];
         } catch (error) {
             console.error("Client Analysis Error:", error);
             return [];
         }
     },
 
-    // 5. المحادثة مع الشريكة (Chat with Partner)
+    /**
+     * Chat with Partner - Main in-app chat function
+     */
     async chatWithPartner(message: string, context: any): Promise<string> {
         const systemPrompt = `
-            أنتِ أمينة، الشريكة الاستراتيجية ومستشارة الأعمال لصالون ZenStyle.
-            الوصول: لديكِ رؤية كاملة لبيانات الصالون (المبيعات، المخزون، الموظفين، المواعيد).
-            السياق الحالي للصالون: ${JSON.stringify(context)}
-            
-            دورك:
-            1. تحليل الأداء واقتراح تحسينات.
-            2. الرد على استفسارات "المالكة" (User) بخصوص العمل.
-            3. التنبيه للمخاطر (نقص مخزون، تراجع مبيعات).
-            
-            الأسلوب:
-            - دارجة جزائرية مهنية ولكن ودودة ("يا لالة"، "شوفي..").
-            - كوني مختصرة ومفيدة.
-            - استخدمي الأرقام من السياق لدعم كلامك.
-            
-            مثال: "المبيعات اليوم ناقصة شوية (5000 دج)، بالاك لازم نديرو ستوري في انستغرام؟"
-        `;
+أنتِ أمينة، الشريكة الاستراتيجية والصديقة المقربة لصاحبة صالون ZenStyle.
+تكلمي معاها داخل التطبيق فقط.
+
+**شخصيتك:**
+- صديقة مقربة وفاهمة في البزنس
+- تتكلمي دارجة جزائرية عصرية، ودودة بس عقلانية
+- عندك رؤية كاملة على الصالون (مبيعات، مخزون، موظفين، مواعيد)
+- ما تحبيش تعاودي نفس الكلام - كل رد يكون مختلف حسب السياق
+
+**السياق الحالي:** ${JSON.stringify(context)}
+
+**قواعد المحادثة:**
+1. لو سؤالها عن الأرقام: جاوبي بالأرقام الحقيقية من السياق
+2. لو استفسار عن موظف: حللي الأداء بصراحة
+3. لو مخاوف من شيء: نبهيها برقة
+4. ما تقوليش "يا لالة" في كل جملة - استخدميها مرة أو مرتين بس
+5. كوني مختصرة ومفيدة (4-5 سطور بس)
+6. لو المحادثة مستمرة: ما ترحبيش من جديد، كملي طبيعي
+
+**أسلوبك:**
+- "شوفي، الأرقام تقول..."
+- "من وجهة نظري..."
+- "ننصحك بـ..."
+
+ما تكرريش نفس الجمل الافتتاحية في كل رد.
+`;
 
         try {
             const response = await openai.chat.completions.create({
@@ -446,12 +489,13 @@ export const amina = {
                     { role: "system", content: systemPrompt },
                     { role: "user", content: message }
                 ],
-                temperature: 0.7,
+                temperature: 0.75,
+                max_tokens: 250
             });
-            return response.choices[0]?.message?.content || "اسمحيلي لالة، راني نخمم، عاودي سؤالك.";
+            return response.choices[0]?.message?.content || "اسمحيلي، راني نخمم في السؤال تاعك... 🤔";
         } catch (error) {
             console.error("Amina Chat Error:", error);
-            return "كاين مشكل في الاتصال، دقيقة ونرجعلك.";
+            return "كاين مشكل في الاتصال، دقيقة ونرجعلك 🙏";
         }
     }
 };
@@ -460,15 +504,14 @@ export const amina = {
 // 📦 التوافقية مع الكود القديم
 // ==========================================
 
-// الحفاظ على التوافقية مع الكود الحالي
 export const aiService = {
     gatherBusinessContext: amina.gatherBusinessContext,
-    // [MODIFIED] Now uses Amina (Business Partner) instead of Sarah for In-App Chat
+    // [UPDATED] Now uses Amina for In-App Chat (Partner conversation)
     chatWithClient: amina.chatWithPartner,
     getOwnerInsight: amina.getInsight,
     getSmartAlerts: aiUtils.getSmartAlerts,
     analyzeClient: amina.analyzeClient
 };
 
-// الحفاظ على التوافقية مع WhatsApp AI (If still needed locally, otherwise relies on API/Webhook)
+// WhatsApp AI uses Sarah (for customer conversations only)
 export const whatsappAI = sarah;
