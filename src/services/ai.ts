@@ -115,42 +115,35 @@ export const sarah = {
      * Get smart context with conversation state tracking
      */
     async getSmartContext(phoneNumber: string, client: ClientProfile | null): Promise<SmartContext> {
-        const { data: recentMessages } = await (api as any).whatsapp.getRecentMessages(phoneNumber);
+        // زيادة عدد الرسائل المسترجعة لضمان عدم ضياع السياق
+        const { data: recentMessages } = await (api as any).whatsapp.getRecentMessages(phoneNumber, 10);
 
-        // Analyze conversation stage based on message history
         const messages = recentMessages || [];
         let stage: SmartContext['conversationStage'] = 'greeting';
-        const topicsDiscussed: string[] = [];
 
+        // تحليل أعمق للسياق الحالي
         if (messages.length > 0) {
-            const lastMessages = messages.slice(-5);
-            const content = lastMessages.map((m: any) => m.content.toLowerCase()).join(' ');
+            const fullContent = messages.map((m: any) => m.content.toLowerCase()).join(' ');
 
-            // Detect conversation stage
-            if (content.includes('حجز') || content.includes('موعد') || content.includes('وقت')) {
-                stage = content.includes('أكد') || content.includes('تمام') ? 'confirmation' : 'booking';
-            } else if (content.includes('سعر') || content.includes('بزاف') || content.includes('شحال')) {
+            // نظام الكشف عن المرحلة (State Machine Logic)
+            if (fullContent.includes('تأكيد') || fullContent.includes('أوك') || fullContent.includes('خلاص')) {
+                stage = 'confirmation';
+            } else if (fullContent.includes('وقت') || fullContent.includes('ساعة') || fullContent.includes('غدوة')) {
+                stage = 'booking';
+            } else if (fullContent.includes('شحال') || fullContent.includes('بري') || fullContent.includes('سعر')) {
                 stage = 'inquiry';
-            } else if (messages.length > 2) {
-                stage = 'closing';
             }
-
-            // Track discussed topics to avoid repetition
-            if (content.includes('سعر')) topicsDiscussed.push('pricing');
-            if (content.includes('حجز') || content.includes('موعد')) topicsDiscussed.push('booking');
-            if (content.includes('خدمة') || content.includes('شنو عندكم')) topicsDiscussed.push('services');
         }
 
         return {
             clientName: client?.name,
             tier: client?.tier,
-            lastVisit: client?.lastVisit ? new Date(client.lastVisit).toLocaleDateString('ar-DZ') : undefined,
-            visitCount: client?.visitCount,
-            recentMessages: messages?.slice(-3),
+            recentMessages: messages, // نرسل التاريخ كاملاً للمودل
             conversationStage: stage,
-            topicsDiscussed
         };
     },
+
+
 
     /**
      * Main reply function for WhatsApp - Natural and non-repetitive
@@ -184,7 +177,7 @@ export const sarah = {
                 max_tokens: 200
             });
 
-            const reply = response.choices[0]?.message?.content || "دقيقة برك لالة نثبت ونرجعلك 💕";
+            const reply = response.choices[0]?.message?.content || "دقيقة برك ختي نثبت ونرجعلك 💕";
 
             await (api as any).whatsapp.updateMessages(phoneNumber, 'user', message);
             await (api as any).whatsapp.updateMessages(phoneNumber, 'assistant', reply);
