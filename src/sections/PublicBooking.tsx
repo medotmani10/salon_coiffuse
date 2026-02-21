@@ -181,7 +181,7 @@ export default function PublicBooking() {
             // 5. إشعار n8n لإرسال تأكيد الواتساب
             try {
                 await fetch(
-                    'http://YOUR_N8N_URL:5678/webhook/trigger-whatsapp-confirmation',
+                    'https://falconnoid-matilde-unproclaimed.ngrok-free.dev:5678/webhook/trigger-whatsapp-confirmation',
                     {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
