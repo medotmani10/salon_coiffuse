@@ -1,525 +1,247 @@
-import OpenAI from 'openai';
-import type { Alert } from '@/types';
-import { api } from './api';
+/**
+ * Amina — Internal CRM AI Partner
+ * مساعدة داخلية للموظفين داخل لوحة التحكم فقط.
+ * (Sara / WhatsApp bot logic has been moved to n8n)
+ */
 
-// Support both Vite (import.meta.env) and Node.js (process.env)
-const getEnv = (key: string) => {
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-        return import.meta.env[key];
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
+const MODEL = 'google/gemini-flash-1.5-8b';
+const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+import { supabase } from '@/lib/supabase';
+
+// ─── Core Chat Function ───────────────────────────────────────────────────────
+
+async function callAI(messages: { role: string; content: string }[]): Promise<string> {
+    if (!OPENROUTER_API_KEY) {
+        return 'مفتاح OpenRouter غير مضبوط. يرجى إضافة VITE_OPENROUTER_API_KEY في ملف .env';
     }
-    if (typeof process !== 'undefined' && process.env) {
-        return process.env[key];
+
+    const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            model: MODEL,
+            messages,
+            max_tokens: 500,
+            temperature: 0.7,
+        }),
+    });
+
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`OpenRouter error: ${err}`);
     }
-    return undefined;
-};
 
-// الإعدادات - تم توجيهها لـ OpenRouter مع دعم GPT-4o-mini
-const apiKey = getEnv('VITE_OPENROUTER_API_KEY') || '';
-const openai = new OpenAI({
-    baseURL: "https://openrouter.ai/api/v1",
-    apiKey: apiKey,
-    dangerouslyAllowBrowser: true,
-    defaultHeaders: {
-        "HTTP-Referer": "https://smart-salon-dz.com", // اختياري لـ OpenRouter
-        "X-Title": "Smart Salon Manager"
-    }
-});
-
-// ==========================================
-// 🔧 أدوات مشتركة
-// ==========================================
-export const aiUtils = {
-    // التنبيهات الذكية (Smart Alerts)
-    async getSmartAlerts(): Promise<Alert[]> {
-        const alerts: Alert[] = [];
-        const { data: products } = await api.products.getAll();
-
-        // تنبيه المخزون (Stock Alert)
-        products?.filter((p: any) => p.stock <= p.minStock).forEach((p: any) => {
-            alerts.push({
-                id: `ai-stock-${p.id}`,
-                type: 'stock',
-                titleAr: 'قريب يخلص السلعة!',
-                titleFr: 'Alerte Stock',
-                messageAr: `المنتج "${p.nameFr}" بقاولك منه ${p.stock} حبات بس، لازم تشري!`,
-                messageFr: `Il ne reste que ${p.stock} unités de "${p.nameFr}".`,
-                severity: 'warning',
-                isRead: false,
-                createdAt: new Date()
-            });
-        });
-
-        return alerts;
-    }
-};
-
-// ==========================================
-// 🟢 سارة (Sarah) - موظفة الاستقبال الرقمية للواتساب
-// ==========================================
-// الجمهور: الزبائن عبر WhatsApp فقط
-// الصلاحيات: Read خدمات + أسعار + مواعيد
-// القيود: ❌ أرباح، ❌ تكاليف، ❌ رواتب، ❌ لا تتكلم داخل التطبيق
-
-interface ClientProfile {
-    id: string;
-    name: string;
-    tier: string;
-    lastVisit?: string;
-    visitCount: number;
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || 'لا يوجد رد من الذكاء الاصطناعي.';
 }
 
-interface BookingContext {
-    stage: 'greeting' | 'collecting_service' | 'collecting_date' | 'collecting_time' | 'collecting_name' | 'confirming' | 'completed' | 'cancelled';
-    service?: string;
-    serviceId?: string;
-    date?: string;
-    time?: string;
-    staffPreference?: string;
-    clientName?: string;
-    lastQuestion?: string;
-    missingInfo?: string[];
-    availableSlots?: string[];
-    services?: any[];
-}
+// ─── Business Context ─────────────────────────────────────────────────────────
 
-interface SmartContext {
-    clientName?: string;
-    tier?: string;
-    lastVisit?: string;
-    visitCount?: number;
-    recentMessages?: Array<{ role: string; content: string }>;
-    conversationStage?: 'greeting' | 'inquiry' | 'booking' | 'confirmation' | 'closing';
-    topicsDiscussed?: string[];
-    bookingContext?: BookingContext;
-}
+async function gatherBusinessContext(): Promise<string> {
+    try {
+        const today = new Date().toISOString().split('T')[0];
 
-export const sarah = {
-    /**
-     * Identify client from phone number
-     */
-    async identifyClient(phoneNumber: string): Promise<ClientProfile | null> {
-        const { data: client } = await (api as any).whatsapp.findClientByPhone(phoneNumber);
+        const [appointmentsRes, clientsRes, revenueRes] = await Promise.all([
+            supabase
+                .from('appointments')
+                .select('id, status')
+                .eq('date', today),
+            supabase
+                .from('clients')
+                .select('id', { count: 'exact', head: true }),
+            supabase
+                .from('appointments')
+                .select('total_amount')
+                .eq('date', today)
+                .eq('status', 'completed'),
+        ]);
 
-        if (!client) return null;
+        const totalToday = appointmentsRes.data?.length || 0;
+        const completed = appointmentsRes.data?.filter((a) => a.status === 'completed').length || 0;
+        const totalClients = clientsRes.count || 0;
+        const revenue = revenueRes.data?.reduce((sum, a) => sum + (a.total_amount || 0), 0) || 0;
 
-        return {
-            id: client.id,
-            name: `${client.first_name} ${client.last_name}`,
-            tier: client.tier || 'bronze',
-            lastVisit: client.last_visit,
-            visitCount: client.visit_count || 0
-        };
-    },
-
-    /**
-     * Get smart context with conversation state tracking
-     */
-    async getSmartContext(phoneNumber: string, client: ClientProfile | null): Promise<SmartContext> {
-        // زيادة عدد الرسائل المسترجعة لضمان عدم ضياع السياق
-        const { data: recentMessages } = await (api as any).whatsapp.getRecentMessages(phoneNumber, 10);
-
-        const messages = recentMessages || [];
-        let stage: SmartContext['conversationStage'] = 'greeting';
-
-        // تحليل أعمق للسياق الحالي
-        if (messages.length > 0) {
-            const fullContent = messages.map((m: any) => m.content.toLowerCase()).join(' ');
-
-            // نظام الكشف عن المرحلة (State Machine Logic)
-            if (fullContent.includes('تأكيد') || fullContent.includes('أوك') || fullContent.includes('خلاص')) {
-                stage = 'confirmation';
-            } else if (fullContent.includes('وقت') || fullContent.includes('ساعة') || fullContent.includes('غدوة')) {
-                stage = 'booking';
-            } else if (fullContent.includes('شحال') || fullContent.includes('بري') || fullContent.includes('سعر')) {
-                stage = 'inquiry';
-            }
-        }
-
-        return {
-            clientName: client?.name,
-            tier: client?.tier,
-            recentMessages: messages, // نرسل التاريخ كاملاً للمودل
-            conversationStage: stage,
-        };
-    },
-
-
-
-    /**
-     * Main reply function for WhatsApp - Natural and non-repetitive
-     */
-    async replyToClient(message: string, phoneNumber: string): Promise<string> {
-        try {
-            await (api as any).whatsapp.getSession(phoneNumber);
-            const client = await this.identifyClient(phoneNumber);
-
-            if (client) {
-                await (api as any).whatsapp.linkClientToSession(phoneNumber, client.id);
-            }
-
-            const context = await this.getSmartContext(phoneNumber, client);
-            const systemPrompt = this.buildNaturalPrompt(context, message);
-
-            const messages: any[] = [{ role: "system", content: systemPrompt }];
-
-            if (context.recentMessages && context.recentMessages.length > 0) {
-                context.recentMessages.forEach(msg => {
-                    messages.push({ role: msg.role, content: msg.content });
-                });
-            }
-
-            messages.push({ role: "user", content: message });
-
-            const response = await openai.chat.completions.create({
-                model: "openai/gpt-4o-mini",
-                messages,
-                temperature: 0.75,
-                max_tokens: 200
-            });
-
-            const reply = response.choices[0]?.message?.content || "دقيقة برك ختي نثبت ونرجعلك 💕";
-
-            await (api as any).whatsapp.updateMessages(phoneNumber, 'user', message);
-            await (api as any).whatsapp.updateMessages(phoneNumber, 'assistant', reply);
-
-            return reply;
-
-        } catch (error) {
-            console.error("WhatsApp AI Error:", error);
-            return "راني نعاني من شوية مشاكل في الكونيكسيو، عاوديلي شوية برك 🙏";
-        }
-    },
-
-    /**
-     * Build natural, non-repetitive prompt for WhatsApp
-     */
-    buildNaturalPrompt(context: SmartContext, currentMessage: string): string {
-        const isFirstMessage = !context.recentMessages || context.recentMessages.length === 0;
-        const stage = context.conversationStage || 'greeting';
-        const isReturningClient = context.visitCount && context.visitCount > 1;
-
-        let prompt = `أنتِ سارة، موظفة استقبال ودودة في صالون ZenStyle. تكلمي مع الزبائن في الواتساب فقط.
-
-**شخصيتك:**
-- بنت بلاد مهذبة، تتكلم دارجة جزائرية ناعمة وطبيعية
-- تفهمي في خدمات الصالون وتعرفي تفاصيلها
-- ما تحبيش تعاودي نفس الكلام - كل رد يكون مختلف حسب السياق
-- تتكلمي كأنك بنت خالتهم، مريحة وعلى راحتهم
-
-**صلاحياتك:**
-- تعرفي الخدمات والأسعار والمواعيد المتاحة
-- تحجزي المواعيد وتأكديها
-- ❌ ممنوع: المبيعات، الأرباح، الرواتب، المخزون الداخلي
-
-`;
-
-        // Client context
-        if (context.clientName) {
-            prompt += `**الزبونة:** ${context.clientName}`;
-            if (isReturningClient) {
-                prompt += ` (زبونة قديمة وثقيلة، زارتنا ${context.visitCount} مرات)`;
-            }
-            prompt += '\n';
-            if (context.lastVisit) {
-                prompt += `**آخر زيارة:** من ${context.lastVisit}\n`;
-            }
-        } else {
-            prompt += `**الزبونة:** جديدة، خليها تحس بالترحيب\n`;
-        }
-
-        // Conversation stage guidance
-        prompt += `\n**مرحلة المحادثة:** ${stage}\n`;
-
-        // Anti-repetition rules
-        prompt += `\n**قواعد مهمة لتجنب التكرار:**\n`;
-        if (isFirstMessage) {
-            prompt += `- الرسالة الأولى: رحبي بالزبونة بـ "السلام عليكم" + اسمها لو تعرفيها\n`;
-        } else {
-            prompt += `- المحادثة مستمرة: لا تقولي "السلام عليكم" مرة أخرى! كملي الحديث طبيعي\n`;
-        }
-
-        if (context.topicsDiscussed?.includes('pricing')) {
-            prompt += `- تم ذكر الأسعار مسبقاً - ما تحكيش على الأسعار إلا لو سألت صراحة\n`;
-        }
-        if (context.topicsDiscussed?.includes('services')) {
-            prompt += `- تم عرض الخدمات مسبقاً - ركزي على التفاصيل الجديدة فقط\n`;
-        }
-
-        // Current message context
-        prompt += `\n**رسالتها الحالية:** "${currentMessage}"\n`;
-
-        // Response style based on stage
-        prompt += `\n**أسلوب الرد:**\n`;
-        if (stage === 'greeting') {
-            prompt += `- رحبي وعرضي مساعدة بسيطة\n- مثال: "وعليكم السلام لالة [الاسم]! كيفاه نقدر نعاونك اليوم؟"\n`;
-        } else if (stage === 'inquiry') {
-            prompt += `- جاوبي مباشرة وباختصار\n- لو سألت على السعر: قولي السعر + وقت الخدمة\n- لو سألت على خدمة: وصفيها بكلمتين واقترحي الوقت المناسب\n`;
-        } else if (stage === 'booking') {
-            prompt += `- اقترحي موعدين محددين (مثلاً: "عندنا غدوة على 10 أو 3 العشية")\n- أكدي التفاصيل: اليوم + الساعة + الخدمة\n`;
-        } else if (stage === 'confirmation') {
-            prompt += `- أكدي الحجز برقم أو تفصيل واضح\n- ختمي بجملة طيبة عن الاستعداد لاستقبالها\n`;
-        } else {
-            prompt += `- كوني ودودة واختصارية\n- لو الحجز تم: "نستناك لالة ✨"\n- لو عندها سؤال تاني: جاوبي مباشرة\n`;
-        }
-
-        prompt += `\n**ردك الآن:**`;
-
-        return prompt;
-    },
-
-    /**
-     * [DEPRECATED] This function is for in-app chat which now uses Amina
-     * Kept for compatibility but redirects to WhatsApp-specific responses
-     */
-    async chatWithClient(_message: string, _context: any): Promise<string> {
-        // This should not be called for in-app chat anymore
-        // In-app chat now uses amina.chatWithPartner
-        return "الرجاء استخدام amina للمحادثة داخل التطبيق.";
-    },
-
-    /**
-     * Gather limited context for clients (services, prices, appointments only)
-     */
-    async gatherClientContext(clientId?: string) {
-        try {
-            const [
-                { data: services },
-                { data: upcoming }
-            ] = await Promise.all([
-                api.services.getAll(),
-                api.appointments.getUpcoming()
-            ]);
-
-            let clientInfo = null;
-            if (clientId) {
-                const { data: clients } = await api.clients.getAll();
-                const client = clients?.find(c => c.id === clientId);
-                if (client) {
-                    clientInfo = {
-                        name: `${client.firstName} ${client.lastName}`,
-                        tier: client.tier,
-                        lastVisit: client.lastVisit,
-                        loyaltyPoints: client.loyaltyPoints
-                    };
-                }
-            }
-
-            return {
-                timestamp: new Date().toLocaleString('ar-DZ'),
-                services: services?.map((s: any) => ({
-                    name: s.nameFr,
-                    price: s.price,
-                    duration: s.duration
-                })),
-                upcomingAppointments: upcoming?.map((a: any) => ({
-                    date: a.date,
-                    time: a.start_time,
-                    service: a.service_name
-                })),
-                client: clientInfo
-            };
-        } catch (error) {
-            console.error("Client Context Error:", error);
-            return null;
-        }
+        return `
+📊 بيانات اليوم (${today}):
+- المواعيد الإجمالية: ${totalToday}
+- المواعيد المكتملة: ${completed}
+- إجمالي الزبائن: ${totalClients}
+- الإيرادات اليومية: ${revenue} دج
+    `.trim();
+    } catch {
+        return 'تعذّر جلب بيانات العمل.';
     }
-};
+}
 
-// ==========================================
-// 🔵 أمينة (Amina) - الشريكة الاستراتيجية للتطبيق
-// ==========================================
-// الجمهور: صاحبة الصالون (داخل التطبيق فقط)
-// الصلاحيات: Read-Only لكل شيء (مبيعات، مصاريف، مخزون، أداء)
-// القيود: لا تتكلم مع الزبائن - فقط مع المالكة داخل التطبيق
+// ─── Amina Methods ────────────────────────────────────────────────────────────
 
 export const amina = {
     /**
-     * Gather complete business context
+     * دردشة داخلية مع الموظفين/المديرين داخل لوحة التحكم
      */
-    async gatherBusinessContext() {
+    async chatWithPartner(conversationHistory: { role: string; content: string }[], context: string): Promise<string> {
+        const messages = [
+            {
+                role: 'system',
+                content: `أنت أمينة، مساعدة ذكية داخلية لصالون ZenStyle. تساعدين الفريق في فهم أداء الصالون وتقديم التوصيات.
+        
+${context}
+
+أجيبي بإيجاز وبشكل مفيد. استخدمي العربية أو الفرنسية حسب لغة السؤال.`,
+            },
+            ...conversationHistory
+        ];
+        return callAI(messages);
+    },
+
+    /**
+     * جلب insight سريع للوحة التحكم
+     */
+    async getInsight(context: string): Promise<string> {
+        const messages = [
+            {
+                role: 'system',
+                content: 'أنت أمينة، مساعدة صالون ZenStyle. قدّمي ملاحظة واحدة مفيدة وقصيرة (جملة أو جملتان) بناءً على بيانات اليوم.',
+            },
+            {
+                role: 'user',
+                content: `بيانات اليوم:\n${context}\n\nما هي ملاحظتك؟`,
+            },
+        ];
+        return callAI(messages);
+    },
+
+    /**
+     * تحليل سريع لبيانات زبونة
+     */
+    async analyzeClient(client: {
+        first_name?: string;
+        last_name?: string;
+        total_visits?: number;
+        total_spent?: number;
+        last_visit?: string;
+    }): Promise<string> {
+        const messages = [
+            {
+                role: 'system',
+                content: 'أنت أمينة. حلّلي بيانات الزبونة وقدّمي توصية قصيرة لتحسين تجربتها.',
+            },
+            {
+                role: 'user',
+                content: `الزبونة: ${client.first_name || ''} ${client.last_name || ''}
+الزيارات: ${client.total_visits || 0}
+الإنفاق الإجمالي: ${client.total_spent || 0} دج
+آخر زيارة: ${client.last_visit || 'غير معروف'}`,
+            },
+        ];
+        return callAI(messages);
+    },
+
+    gatherBusinessContext,
+};
+
+// ─── Smart Alerts (from Supabase data) ───────────────────────────────────────
+
+export const aiUtils = {
+    gatherBusinessContext,
+
+    async getSmartAlerts(): Promise<import('@/types').Alert[]> {
+        const alerts: import('@/types').Alert[] = [];
+        const today = new Date().toISOString().split('T')[0];
+
         try {
-            const [
-                { data: stats },
-                { data: products },
-                { data: upcoming },
-                { data: staff },
-                { data: clients },
-                { data: transactions },
-                { data: expenses }
-            ] = await Promise.all([
-                api.appointments.getStats(),
-                api.products.getAll(),
-                api.appointments.getUpcoming(),
-                api.staff.getAll(),
-                api.clients.getAll(),
-                api.transactions.getAll('month'),
-                api.expenses.getAll()
+            const [apptRes, serviceStats, pendingRes] = await Promise.all([
+                // مواعيد اليوم المعلّقة (لم تُأكَّد بعد)
+                supabase
+                    .from('appointments')
+                    .select('id')
+                    .eq('date', today)
+                    .eq('status', 'pending'),
+                // أكثر خدمة محجوزة هذا الشهر
+                supabase
+                    .from('appointment_services')
+                    .select('service_id, services(name_ar, name_fr)')
+                    .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
+                    .limit(100),
+                // مواعيد اليوم المؤكدة
+                supabase
+                    .from('appointments')
+                    .select('id')
+                    .eq('status', 'confirmed')
+                    .eq('date', today),
             ]);
 
-            return {
-                timestamp: new Date().toLocaleString('ar-DZ'),
-                revenue: stats?.totalRevenue || 0,
-                activeStaff: staff?.filter(s => s.isActive).length,
-                inventoryStatus: {
-                    lowStock: products?.filter((p: any) => p.stock <= p.minStock).map((p: any) => p.nameFr),
-                    critical: products?.filter((p: any) => p.stock === 0).length
-                },
-                vipList: clients?.sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 3),
-                appointmentsCount: upcoming?.length || 0,
-                financialSummary: {
-                    totalTransactions: transactions?.length || 0,
-                    totalExpenses: expenses?.reduce((sum: number, e: any) => sum + e.amount, 0) || 0,
-                    netProfit: (stats?.totalRevenue || 0) - (expenses?.reduce((sum: number, e: any) => sum + e.amount, 0) || 0)
-                },
-                staffPerformance: staff?.map((s: any) => ({
-                    name: s.name,
-                    appointments: s.appointments_count || 0,
-                    revenue: s.revenue_generated || 0
-                }))
-            };
-        } catch (error) {
-            console.error("Context Error:", error);
-            return null;
+            // تنبيه 1: مواعيد اليوم المعلّقة
+            const pendingCount = apptRes.data?.length || 0;
+            if (pendingCount > 0) {
+                alerts.push({
+                    id: 'pending-appts-' + today,
+                    type: 'appointment',
+                    titleAr: `${pendingCount} موعد بانتظار التأكيد`,
+                    titleFr: `${pendingCount} RDV en attente`,
+                    messageAr: 'يوجد مواعيد اليوم لم تُؤكَّد بعد. أسرعي بالتأكيد!',
+                    messageFr: 'Des rendez-vous du jour ne sont pas encore confirmés.',
+                    severity: pendingCount > 2 ? 'error' : 'warning',
+                    isRead: false,
+                    createdAt: new Date(),
+                });
+            }
+
+            // تنبيه 2: أكثر خدمة مطلوبة هذا الشهر
+            if (serviceStats.data && serviceStats.data.length > 0) {
+                const countMap = new Map<string, { nameAr: string; nameFr: string; count: number }>();
+                for (const row of serviceStats.data as any[]) {
+                    const id = row.service_id;
+                    if (!countMap.has(id)) {
+                        countMap.set(id, {
+                            nameAr: row.services?.name_ar || '',
+                            nameFr: row.services?.name_fr || '',
+                            count: 0,
+                        });
+                    }
+                    countMap.get(id)!.count++;
+                }
+                const top = Array.from(countMap.values()).sort((a, b) => b.count - a.count)[0];
+                if (top && top.count > 0) {
+                    alerts.push({
+                        id: 'top-service-' + new Date().getMonth(),
+                        type: 'info',
+                        titleAr: `⭐ الأكثر طلباً: ${top.nameAr}`,
+                        titleFr: `⭐ Service phare: ${top.nameFr}`,
+                        messageAr: `${top.nameAr} حُجِزَت ${top.count} مرة هذا الشهر`,
+                        messageFr: `${top.nameFr} réservé ${top.count} fois ce mois`,
+                        severity: 'info',
+                        isRead: false,
+                        createdAt: new Date(),
+                    });
+                }
+            }
+
+            // تنبيه 3: مواعيد اليوم المؤكدة
+            const confirmedToday = pendingRes.data?.length || 0;
+            if (confirmedToday > 0) {
+                alerts.push({
+                    id: 'confirmed-today-' + today,
+                    type: 'appointment',
+                    titleAr: `📅 ${confirmedToday} موعد اليوم`,
+                    titleFr: `📅 ${confirmedToday} RDV aujourd'hui`,
+                    messageAr: `لديك ${confirmedToday} موعد مؤكد اليوم. أداء رائع!`,
+                    messageFr: `Vous avez ${confirmedToday} RDV confirmé(s) aujourd'hui.`,
+                    severity: 'info',
+                    isRead: false,
+                    createdAt: new Date(),
+                });
+            }
+
+        } catch (err) {
+            console.error('getSmartAlerts error:', err);
         }
+
+        return alerts;
     },
-
-    /**
-     * Get business insight - Natural and actionable
-     */
-    async getInsight(context: any): Promise<string> {
-        const prompt = `
-أنتِ أمينة، الشريكة والصديقة المقربة لصاحبة صالون ZenStyle.
-تكلمي معاها داخل التطبيق فقط، كأنك قاعدة معاها في الكافي تشربي قهوة وتنصحيها في عملها.
-
-**شخصيتك:**
-- فاهمة في البزنس وعندك عين تشوف بها المشاكل قبل ما تقع
-- تتكلمي دارجة جزائرية عصرية وعقلانية
-- ما تحبيش تعاودي نفس النصيحة - كل مرة تشوفي حاجة جديدة
-- صريحة بس محترمة، تقولي الحقيقة بس بأسلوب بناتي
-
-**البيانات اللي عندك:** ${JSON.stringify(context)}
-
-**قواعد النصح:**
-1. ما تعاوديش نفس النصيحة اللي قلتيها قبل - شوفي حاجة جديدة في الأرقام
-2. لو المبيعات ناقصة: اقترحي promo أو حملة في ستوريات
-3. لو المخزون قريب يخلص: نبهيها بوقت كافي
-4. لو عاملة ماشية مليح: شجعيها
-5. استخدمي أرقام حقيقية من البيانات
-
-**ردك:** نصيحة واحدة واضحة، مباشرة، ومختصرة (3-4 سطور بس). لا تكرري "يا لالة" في كل جملة.
-`;
-
-        const response = await openai.chat.completions.create({
-            model: "openai/gpt-4o-mini",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.75
-        });
-        return response.choices[0]?.message?.content || "";
-    },
-
-    /**
-     * Analyze client - For business insights
-     */
-    async analyzeClient(client: any): Promise<any[]> {
-        const prompt = `
-أنتِ أمينة، الشريكة الاستراتيجية لصالون ZenStyle.
-عندك معلومات كاملة على الزبون: ${JSON.stringify(client)}.
-
-حللي سلوك الزبون وقدمي توصية واحدة فقط (مختصرة):
-1. لو برونزي: كيفاه نرقيه؟
-2. لو زياراته قليلة: شنو نعملو باش يرجع؟
-3. لو ينفق بزاف: شنو نعرضلو من خدمات جديدة؟
-4. لو آخر زيارة قديمة: كيفاه نعاودو التواصل؟
-
-**قواعد:**
-- رد واحد مختصر (سطرين بس)
-- ما تعاوديش نفس التوصية اللي قلتيها في المرة اللي فاتت
-- استخدمي لغة بناتية عملية
-`;
-
-        try {
-            const response = await openai.chat.completions.create({
-                model: "openai/gpt-4o-mini",
-                messages: [{ role: "user", content: prompt }],
-                temperature: 0.7
-            });
-
-            const analysis = response.choices[0]?.message?.content || "لا توجد توصيات حالياً.";
-
-            return [{
-                type: 'recommendation',
-                message: analysis,
-                confidence: 0.85,
-                action: 'مراجعة استراتيجية الزبون'
-            }];
-        } catch (error) {
-            console.error("Client Analysis Error:", error);
-            return [];
-        }
-    },
-
-    /**
-     * Chat with Partner - Main in-app chat function
-     */
-    async chatWithPartner(message: string, context: any): Promise<string> {
-        const systemPrompt = `
-أنتِ أمينة، الشريكة الاستراتيجية والصديقة المقربة لصاحبة صالون ZenStyle.
-تكلمي معاها داخل التطبيق فقط.
-
-**شخصيتك:**
-- صديقة مقربة وفاهمة في البزنس
-- تتكلمي دارجة جزائرية عصرية، ودودة بس عقلانية
-- عندك رؤية كاملة على الصالون (مبيعات، مخزون، موظفين، مواعيد)
-- ما تحبيش تعاودي نفس الكلام - كل رد يكون مختلف حسب السياق
-
-**السياق الحالي:** ${JSON.stringify(context)}
-
-**قواعد المحادثة:**
-1. لو سؤالها عن الأرقام: جاوبي بالأرقام الحقيقية من السياق
-2. لو استفسار عن موظف: حللي الأداء بصراحة
-3. لو مخاوف من شيء: نبهيها برقة
-4. ما تقوليش "يا لالة" في كل جملة - استخدميها مرة أو مرتين بس
-5. كوني مختصرة ومفيدة (4-5 سطور بس)
-6. لو المحادثة مستمرة: ما ترحبيش من جديد، كملي طبيعي
-
-**أسلوبك:**
-- "شوفي، الأرقام تقول..."
-- "من وجهة نظري..."
-- "ننصحك بـ..."
-
-ما تكرريش نفس الجمل الافتتاحية في كل رد.
-`;
-
-        try {
-            const response = await openai.chat.completions.create({
-                model: "openai/gpt-4o-mini",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: message }
-                ],
-                temperature: 0.75,
-                max_tokens: 250
-            });
-            return response.choices[0]?.message?.content || "اسمحيلي، راني نخمم في السؤال تاعك... 🤔";
-        } catch (error) {
-            console.error("Amina Chat Error:", error);
-            return "كاين مشكل في الاتصال، دقيقة ونرجعلك 🙏";
-        }
-    }
 };
-
-// ==========================================
-// 📦 التوافقية مع الكود القديم
-// ==========================================
-
-export const aiService = {
-    gatherBusinessContext: amina.gatherBusinessContext,
-    // [UPDATED] Now uses Amina for In-App Chat (Partner conversation)
-    chatWithClient: amina.chatWithPartner,
-    getOwnerInsight: amina.getInsight,
-    getSmartAlerts: aiUtils.getSmartAlerts,
-    analyzeClient: amina.analyzeClient
-};
-
-// WhatsApp AI uses Sarah (for customer conversations only)
-export const whatsappAI = sarah;

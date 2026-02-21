@@ -29,10 +29,12 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { LogOut } from 'lucide-react';
 import Login from '@/sections/Login';
-import type { Language } from '@/types';
+import type { Language, Alert } from '@/types';
 import { api } from '@/services/api';
+import { aiUtils } from '@/services/ai';
 import { translations } from '@/i18n/translations';
 import Dashboard from '@/sections/Dashboard';
 import POS from '@/sections/POS';
@@ -43,18 +45,38 @@ import Staff from '@/sections/Staff';
 import Inventory from '@/sections/Inventory';
 import Reports from '@/sections/Reports';
 import SettingsPanel from '@/sections/Settings';
+import PublicBooking from '@/sections/PublicBooking';
 import './App.css';
 
 type View = 'dashboard' | 'pos' | 'appointments' | 'clients' | 'services' | 'staff' | 'inventory' | 'reports' | 'settings';
 
 import { ChatWidget } from './components/ChatWidget';
 
-function App() {
+function CRMApp() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [language, setLanguage] = useState<Language>('fr');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
-  const [notifications] = useState(3);
+  const [notifications, setNotifications] = useState<Alert[]>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  useEffect(() => {
+    aiUtils.getSmartAlerts().then(setNotifications).catch(() => { });
+  }, []);
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  const markAllRead = () =>
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+
+  const handleNotifClick = (alert: Alert) => {
+    setNotifications(prev =>
+      prev.map(n => n.id === alert.id ? { ...n, isRead: true } : n)
+    );
+    if (alert.type === 'appointment') setCurrentView('appointments');
+    else if (alert.type === 'stock') setCurrentView('inventory');
+    setNotifOpen(false);
+  };
 
   const t = translations[language];
   const isRTL = language === 'ar';
@@ -316,26 +338,95 @@ function App() {
               </Button>
 
               {/* Notifications */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-xl hover:bg-rose-50 dark:hover:bg-slate-700 relative h-9 w-9 md:h-10 md:w-10"
-              >
-                <Bell className="w-4 h-4 md:w-5 md:h-5 text-slate-600 dark:text-slate-400" />
-                {notifications > 0 && (
-                  <Badge className="absolute -top-1 -right-1 w-4 h-4 md:w-5 md:h-5 p-0 flex items-center justify-center 
-                    bg-rose-500 text-white text-[10px] md:text-xs">
-                    {notifications}
-                  </Badge>
-                )}
-              </Button>
+              <DropdownMenu open={notifOpen} onOpenChange={setNotifOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-xl hover:bg-rose-50 dark:hover:bg-slate-700 relative h-9 w-9 md:h-10 md:w-10"
+                  >
+                    <Bell className="w-4 h-4 md:w-5 md:h-5 text-slate-600 dark:text-slate-400" />
+                    {unreadCount > 0 && (
+                      <Badge className="absolute -top-1 -right-1 w-4 h-4 md:w-5 md:h-5 p-0 flex items-center justify-center
+                        bg-rose-500 text-white text-[10px] md:text-xs">
+                        {unreadCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80 p-0" sideOffset={8}>
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                    <span className="font-semibold text-sm">
+                      {language === 'ar' ? 'الإشعارات' : 'Notifications'}
+                      {unreadCount > 0 && (
+                        <Badge className="ml-2 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 text-xs">
+                          {unreadCount}
+                        </Badge>
+                      )}
+                    </span>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={markAllRead}
+                        className="text-xs text-rose-500 hover:text-rose-700 font-medium"
+                      >
+                        {language === 'ar' ? 'قراءة الكل' : 'Tout lire'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Alerts List */}
+                  <ScrollArea className="max-h-80">
+                    {notifications.length === 0 ? (
+                      <div className="py-8 text-center text-sm text-slate-400">
+                        <Bell className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                        {language === 'ar' ? 'لا توجد إشعارات' : 'Aucune notification'}
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                        {notifications.map(alert => (
+                          <button
+                            key={alert.id}
+                            className={`w-full text-left px-4 py-3 hover:bg-rose-50 dark:hover:bg-slate-700/50 transition-colors ${!alert.isRead ? 'bg-rose-50/50 dark:bg-slate-700/30' : ''
+                              }`}
+                            onClick={() => handleNotifClick(alert)}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${alert.severity === 'error' ? 'bg-red-500' :
+                                alert.severity === 'warning' ? 'bg-amber-500' : 'bg-violet-500'
+                                }`} />
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium ${!alert.isRead ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'
+                                  }`}>
+                                  {language === 'ar' ? alert.titleAr : alert.titleFr}
+                                </p>
+                                <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">
+                                  {language === 'ar' ? alert.messageAr : alert.messageFr}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-center justify-center text-xs text-slate-500 cursor-pointer"
+                    onClick={() => { setCurrentView('dashboard'); setNotifOpen(false); }}
+                  >
+                    {language === 'ar' ? 'عرض كل التنبيهات في اللوحة' : 'Voir tout dans le tableau de bord'}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* User Profile */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-9 w-9 md:h-10 md:w-10 rounded-full hover:bg-rose-50 dark:hover:bg-slate-700">
-                    <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 
-                      flex items-center justify-center text-white font-medium shadow-lg shadow-rose-200 dark:shadow-rose-900/30 overflow-hidden">
+                  <Button variant="ghost" className="relative h-9 w-9 md:h-10 md:w-10 rounded-full hover:bg-rose-50 dark:hover:bg-slate-700 p-0">
+                    <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-gradient-to-br from-rose-400 to-pink-500
+                      flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-rose-200 dark:shadow-rose-900/30 overflow-hidden ring-2 ring-white dark:ring-slate-700">
                       {user?.avatar ? (
                         <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
                       ) : (
@@ -344,26 +435,60 @@ function App() {
                     </div>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <div className="flex items-center justify-start gap-2 p-2">
-                    <div className="flex flex-col space-y-1 leading-none">
-                      <p className="font-medium">{user?.name || 'User'}</p>
-                      <p className="w-[200px] truncate text-xs text-muted-foreground">
-                        {user?.email}
-                      </p>
+                <DropdownMenuContent align="end" className="w-64 p-0" sideOffset={8}>
+                  {/* Profile Card Header */}
+                  <div className="p-4 bg-gradient-to-br from-rose-50 to-pink-50 dark:from-slate-700 dark:to-slate-700 rounded-t-md">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-rose-400 to-pink-500
+                        flex items-center justify-center text-white font-bold text-lg shadow-md overflow-hidden ring-2 ring-white dark:ring-slate-600 flex-shrink-0">
+                        {user?.avatar ? (
+                          <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                          (user?.name?.charAt(0) || 'U').toUpperCase()
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">
+                          {user?.name || (language === 'ar' ? 'مستخدم' : 'Utilisateur')}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                          {user?.email || ''}
+                        </p>
+                        <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-medium
+                          bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">
+                          {user?.role === 'admin' ? (language === 'ar' ? 'مدير' : 'Admin') :
+                            user?.role === 'manager' ? (language === 'ar' ? 'مسؤول' : 'Manager') :
+                              user?.role === 'receptionist' ? (language === 'ar' ? 'استقبال' : 'Réceptionniste') :
+                                user?.role === 'staff' ? (language === 'ar' ? 'موظف' : 'Employé') :
+                                  (language === 'ar' ? 'مستخدم' : 'Utilisateur')}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      supabase.auth.signOut();
-                      setSession(null);
-                    }}
-                    className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20 cursor-pointer"
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>{language === 'ar' ? 'تسجيل الخروج' : 'Se déconnecter'}</span>
-                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator className="my-0" />
+
+                  {/* Actions */}
+                  <div className="p-1">
+                    <DropdownMenuItem
+                      onClick={() => setCurrentView('settings')}
+                      className="gap-2 cursor-pointer rounded-lg"
+                    >
+                      <Settings className="w-4 h-4 text-slate-500" />
+                      <span>{language === 'ar' ? 'الإعدادات' : 'Paramètres'}</span>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSeparator className="my-1" />
+
+                    <DropdownMenuItem
+                      onClick={() => { supabase.auth.signOut(); setSession(null); }}
+                      className="gap-2 cursor-pointer rounded-lg text-red-600 dark:text-red-400
+                        focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>{language === 'ar' ? 'تسجيل الخروج' : 'Se déconnecter'}</span>
+                    </DropdownMenuItem>
+                  </div>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -427,8 +552,21 @@ function App() {
         </div>
       </div>
       <ChatWidget />
-    </div >
+    </div>
   );
 }
 
-export default App;
+export default function App() {
+  const [currentHash, setCurrentHash] = useState(window.location.hash);
+  useEffect(() => {
+    const onHashChange = () => setCurrentHash(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  if (currentHash === '#/book') {
+    return <PublicBooking />;
+  }
+
+  return <CRMApp />;
+}

@@ -78,13 +78,10 @@ export default function Services({ t, language }: ServicesProps) {
   const [editingService, setEditingService] = useState<Service | null>(null);
 
   const [newServiceData, setNewServiceData] = useState({
-    nameAr: '',
-    nameFr: '',
+    name: '',
     category: 'hair' as ServiceCategory,
     price: '',
     duration: '',
-    descriptionAr: '',
-    descriptionFr: '',
     color: '#f43f5e'
   });
 
@@ -100,32 +97,29 @@ export default function Services({ t, language }: ServicesProps) {
   }, []);
 
   const handleCreateService = async () => {
-    if (!newServiceData.nameAr || !newServiceData.nameFr || !newServiceData.price || !newServiceData.duration) return;
+    if (!newServiceData.name || !newServiceData.price || !newServiceData.duration) return;
 
     setCreating(true);
     try {
       const { data } = await api.services.create({
-        nameAr: newServiceData.nameAr,
-        nameFr: newServiceData.nameFr,
+        nameAr: newServiceData.name,
+        nameFr: newServiceData.name,
         category: newServiceData.category,
         price: parseFloat(newServiceData.price),
         duration: parseInt(newServiceData.duration),
-        descriptionAr: newServiceData.descriptionAr,
-        descriptionFr: newServiceData.descriptionFr,
-        color: categoryColors[newServiceData.category].split(' ')[1].replace('to-', '#') // Hacky color derived or just generic
+        descriptionAr: '',
+        descriptionFr: '',
+        color: newServiceData.color
       });
 
       if (data) {
         setServices(prev => [data, ...prev]);
         setShowNewService(false);
         setNewServiceData({
-          nameAr: '',
-          nameFr: '',
+          name: '',
           category: 'hair',
           price: '',
           duration: '',
-          descriptionAr: '',
-          descriptionFr: '',
           color: '#f43f5e'
         });
       }
@@ -316,19 +310,13 @@ export default function Services({ t, language }: ServicesProps) {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{language === 'ar' ? 'الاسم (عربي)' : 'Nom (Arabe)'}</label>
-                <Input placeholder={language === 'ar' ? 'اسم الخدمة' : 'Nom du service'}
-                  value={newServiceData.nameAr}
-                  onChange={(e) => setNewServiceData({ ...newServiceData, nameAr: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{language === 'ar' ? 'الاسم (فرنسي)' : 'Nom (Français)'}</label>
-                <Input placeholder={language === 'ar' ? 'Nom du service' : 'Nom du service'}
-                  value={newServiceData.nameFr}
-                  onChange={(e) => setNewServiceData({ ...newServiceData, nameFr: e.target.value })} />
-              </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{language === 'ar' ? 'اسم الخدمة' : 'Nom du service'}</label>
+              <Input
+                placeholder={language === 'ar' ? 'مثال: قص شعر، صبغة...' : 'Ex: Coupe, coloration...'}
+                value={newServiceData.name}
+                onChange={(e) => setNewServiceData({ ...newServiceData, name: e.target.value })}
+              />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">{language === 'ar' ? 'الفئة' : 'Catégorie'}</label>

@@ -40,9 +40,8 @@ interface CartItem {
   itemType: 'product' | 'service';
 }
 
-const categories = [
+const productCategories = [
   { id: 'all', nameAr: 'الكل', nameFr: 'Tout' },
-  { id: 'services', nameAr: 'خدمات', nameFr: 'Services' },
   { id: 'hair', nameAr: 'شعر', nameFr: 'Cheveux' },
   { id: 'face', nameAr: 'وجه', nameFr: 'Visage' },
   { id: 'body', nameAr: 'جسم', nameFr: 'Corps' },
@@ -58,8 +57,9 @@ export default function POS({ language }: POSProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [staffMembers, setStaffMembers] = useState<Staff[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [activeTab, setActiveTab] = useState<'products' | 'services'>('products');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedProductCategory, setSelectedProductCategory] = useState('all');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -102,32 +102,36 @@ export default function POS({ language }: POSProps) {
     fetchData();
   }, []);
 
-  // Build unified items list (products + services)
-  const allItems: CartItem[] = [
-    ...products.map(p => ({ ...p, itemType: 'product' as const, quantity: 0 })),
-    ...services.map(s => ({
+  // Products filtered by category + search
+  const filteredProducts: CartItem[] = products
+    .filter(p => {
+      const matchesSearch =
+        p.nameAr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.nameFr.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedProductCategory === 'all' || p.category === selectedProductCategory;
+      return matchesSearch && matchesCategory;
+    })
+    .map(p => ({ ...p, itemType: 'product' as const, quantity: 0 }));
+
+  // Services filtered by search
+  const filteredServices: CartItem[] = services
+    .filter(s =>
+      s.nameAr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.nameFr.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .map(s => ({
       id: s.id,
       nameAr: s.nameAr,
       nameFr: s.nameFr,
-      category: 'services',
+      category: s.category || 'service',
       price: s.price,
-      stock: 999, // services have no stock limit
+      stock: 999,
       minStock: 0,
       quantity: 0,
-      itemType: 'service' as const
-    }))
-  ];
+      itemType: 'service' as const,
+    }));
 
-  const filteredItems = allItems.filter(item => {
-    const matchesSearch =
-      item.nameAr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.nameFr.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesCategory = selectedCategory === 'all' ||
-      (selectedCategory === 'services' ? item.itemType === 'service' : item.category === selectedCategory);
-
-    return matchesSearch && matchesCategory;
-  });
+  const currentItems = activeTab === 'products' ? filteredProducts : filteredServices;
 
   const addToCart = (item: CartItem) => {
     setCart(prev => {
@@ -272,14 +276,46 @@ export default function POS({ language }: POSProps) {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex gap-2 md:gap-6">
-      {/* Left Side - Products */}
-      <div className="flex-1 flex flex-col gap-4 md:gap-6 min-w-0">
-        {/* Header & Search */}
-        <div className="flex items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm">
-          <div className="relative flex-1 max-w-md">
+      {/* Left Side */}
+      <div className="flex-1 flex flex-col gap-3 md:gap-4 min-w-0">
+
+        {/* Tabs + Search Row */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded-xl shadow-sm">
+          {/* Products / Services Tabs */}
+          <div className="flex rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0">
+            <button
+              onClick={() => setActiveTab('products')}
+              className={`flex-1 sm:w-36 px-4 py-2 text-sm font-semibold flex items-center justify-center gap-2 transition-all ${activeTab === 'products'
+                ? 'bg-rose-500 text-white'
+                : 'bg-white dark:bg-slate-800 text-slate-500 hover:text-rose-500'
+                }`}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              {language === 'ar' ? 'المنتجات' : 'Produits'}
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === 'products' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'
+                }`}>{products.length}</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('services')}
+              className={`flex-1 sm:w-36 px-4 py-2 text-sm font-semibold flex items-center justify-center gap-2 transition-all ${activeTab === 'services'
+                ? 'bg-purple-500 text-white'
+                : 'bg-white dark:bg-slate-800 text-slate-500 hover:text-purple-500'
+                }`}
+            >
+              ✂️
+              {language === 'ar' ? 'الخدمات' : 'Services'}
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === 'services' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'
+                }`}>{services.length}</span>
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="relative flex-1">
             <Search className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400`} />
             <Input
-              placeholder={language === 'ar' ? 'بحث عن منتج أو خدمة...' : 'Rechercher produit ou service...'}
+              placeholder={language === 'ar'
+                ? (activeTab === 'products' ? 'بحث في المنتجات...' : 'بحث في الخدمات...')
+                : (activeTab === 'products' ? 'Rechercher produit...' : 'Rechercher service...')}
               className={`${isRTL ? 'pr-9 text-right' : 'pl-9'} bg-slate-50 dark:bg-slate-900 border-none`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -287,60 +323,73 @@ export default function POS({ language }: POSProps) {
           </div>
         </div>
 
-        {/* Categories */}
-        {/* Categories */}
-        <div className="w-full overflow-x-auto pb-2">
-          <div className="flex gap-2 px-1 min-w-max">
-            {categories.map(category => (
-              <Button
-                key={category.id}
-                variant={selectedCategory === category.id ? "default" : "outline"}
-                onClick={() => setSelectedCategory(category.id)}
-                className={`rounded-full px-4 md:px-6 text-xs md:text-sm ${selectedCategory === category.id
-                  ? 'bg-rose-500 hover:bg-rose-600'
-                  : 'border-slate-200 dark:border-slate-700'
-                  }`}
-              >
-                {isRTL ? category.nameAr : category.nameFr}
-              </Button>
-            ))}
+        {/* Product Sub-Categories (only on Products tab) */}
+        {activeTab === 'products' && (
+          <div className="w-full overflow-x-auto pb-1">
+            <div className="flex gap-2 px-1 min-w-max">
+              {productCategories.map(cat => (
+                <Button
+                  key={cat.id}
+                  variant={selectedProductCategory === cat.id ? 'default' : 'outline'}
+                  onClick={() => setSelectedProductCategory(cat.id)}
+                  className={`rounded-full px-4 text-xs ${selectedProductCategory === cat.id
+                    ? 'bg-rose-500 hover:bg-rose-600'
+                    : 'border-slate-200 dark:border-slate-700'
+                    }`}
+                >
+                  {isRTL ? cat.nameAr : cat.nameFr}
+                </Button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Products Grid */}
+        {/* Items Grid */}
         <ScrollArea className="flex-1">
           {loading ? (
             <div className="flex items-center justify-center h-48">
               <Loader2 className="w-8 h-8 animate-spin text-rose-500" />
             </div>
+          ) : currentItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 text-slate-400">
+              <span className="text-4xl mb-3">{activeTab === 'products' ? '📦' : '✂️'}</span>
+              <p className="text-sm">
+                {language === 'ar'
+                  ? (activeTab === 'products' ? 'لا توجد منتجات' : 'لا توجد خدمات')
+                  : (activeTab === 'products' ? 'Aucun produit' : 'Aucun service')}
+              </p>
+            </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 pb-4">
-              {filteredItems.map(item => (
+              {currentItems.map(item => (
                 <Card
                   key={`${item.itemType}-${item.id}`}
-                  className={`cursor-pointer group hover:shadow-lg transition-all border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800 ${item.itemType === 'service' ? 'ring-1 ring-purple-200 dark:ring-purple-800' : ''}`}
-                  onClick={() => item.stock > 0 && addToCart(item)}
+                  className={`cursor-pointer group hover:shadow-lg transition-all border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800 ${activeTab === 'services' ? 'ring-1 ring-purple-200 dark:ring-purple-800' : ''
+                    } ${item.stock === 0 ? 'opacity-40 pointer-events-none' : ''}`}
+                  onClick={() => addToCart(item)}
                 >
                   <CardContent className="p-2">
-                    <div className={`aspect-square rounded-lg mb-2 relative overflow-hidden flex items-center justify-center ${item.itemType === 'service' ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-300'}`}>
-                      <ShoppingCart className="w-5 h-5 md:w-6 md:h-6" />
+                    <div className={`aspect-square rounded-lg mb-2 relative overflow-hidden flex items-center justify-center ${activeTab === 'services'
+                      ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-300'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-300'
+                      }`}>
+                      <span className="text-2xl">{activeTab === 'services' ? '✂️' : '📦'}</span>
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Plus className="w-8 h-8 text-white" />
                       </div>
-                      {item.itemType === 'service' && (
-                        <span className="absolute top-1 right-1 text-[10px] bg-purple-500 text-white px-1.5 py-0.5 rounded">
-                          {language === 'ar' ? 'خدمة' : 'Service'}
-                        </span>
-                      )}
                     </div>
                     <h3 className="font-medium text-xs md:text-sm text-slate-800 dark:text-slate-200 truncate leading-tight">
                       {isRTL ? item.nameAr : item.nameFr}
                     </h3>
                     <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-rose-500 font-bold text-xs md:text-sm">{item.price.toLocaleString()}</span>
-                      {item.itemType === 'product' && (
-                        <span className={`text-[10px] ${item.stock > 0 ? 'text-slate-400' : 'text-red-500'}`}>
-                          {item.stock}
+                      <span className={`font-bold text-xs md:text-sm ${activeTab === 'services' ? 'text-purple-500' : 'text-rose-500'
+                        }`}>{item.price.toLocaleString()}</span>
+                      {activeTab === 'products' && (
+                        <span className={`text-[10px] ${item.stock > 5 ? 'text-slate-400' :
+                          item.stock > 0 ? 'text-amber-500 font-bold' :
+                            'text-red-500 font-bold'
+                          }`}>
+                          {item.stock === 0 ? (language === 'ar' ? 'نفد' : 'Épuisé') : item.stock}
                         </span>
                       )}
                     </div>

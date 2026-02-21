@@ -11,9 +11,15 @@ import {
   Target,
   ArrowUpRight,
   ArrowDownRight,
-
   Loader2,
-  Sparkles
+  Sparkles,
+  Plus,
+  ChevronDown,
+  Scissors,
+  ShoppingBag,
+  UserPlus,
+  FileBarChart,
+  CalendarPlus
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { amina, aiUtils } from '@/services/ai';
@@ -22,6 +28,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 import type { Localization, Language, Alert, View } from '@/types';
 import {
@@ -69,12 +82,8 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
 
   const handleGenerateInsight = async () => {
     setIsGeneratingInsight(true);
-    const context = {
-      revenue: stats.revenue,
-      todayApps: stats.todayAppointments,
-      occupancy: stats.occupancy
-    };
-    const insight = await amina.getInsight(context);
+    const contextStr = `الإيرادات: ${stats.revenue} دج، مواعيد اليوم: ${stats.todayAppointments}، الإشغال: ${stats.occupancy}%`;
+    const insight = await amina.getInsight(contextStr);
     if (insight) {
       setAlerts(prev => [{
         id: 'ai-insight-' + Date.now(),
@@ -112,12 +121,21 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, alertsData] = await Promise.all([
+        const [statsRes, smartAlerts] = await Promise.all([
           api.appointments.getStats(),
-          aiUtils.getSmartAlerts()
+          aiUtils.getSmartAlerts(),
         ]);
 
         if (statsRes.data) {
+          // Add fallback colors for services that may not have one set
+          const FALLBACK_COLORS = ['#f43f5e', '#a855f7', '#3b82f6', '#10b981', '#f59e0b'];
+          const coloredDistribution = (statsRes.data.serviceDistribution || []).map(
+            (s: { name: string; value: number; color?: string }, i: number) => ({
+              ...s,
+              color: s.color || FALLBACK_COLORS[i % FALLBACK_COLORS.length],
+            })
+          );
+
           setStats({
             revenue: statsRes.data.totalRevenue,
             todayAppointments: statsRes.data.todayAppointments,
@@ -125,13 +143,13 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
             occupancy: statsRes.data.occupancy,
             weeklyData: statsRes.data.weeklyData,
             monthlyData: statsRes.data.monthlyData,
-            serviceDistribution: statsRes.data.serviceDistribution,
+            serviceDistribution: coloredDistribution,
             recentActivity: statsRes.data.recentActivity
           });
         }
 
-        if (alertsData) {
-          setAlerts(alertsData);
+        if (smartAlerts.length > 0) {
+          setAlerts(smartAlerts);
         }
 
       } catch (err) {
@@ -215,7 +233,7 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
-      <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+      <div className={`flex items-center justify-between flex-wrap gap-3 ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
         <div>
           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
             {language === 'ar' ? 'مرحباً بعودتك!' : 'Bienvenue!'}
@@ -230,9 +248,104 @@ export default function Dashboard({ t, language, onNavigate }: DashboardProps) {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" className="rounded-xl border-rose-200 dark:border-slate-700">
-            {language === 'ar' ? 'إجراءات سريعة' : 'Actions Rapides'}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 shadow-md shadow-rose-200 dark:shadow-none gap-2">
+                <Plus className="w-4 h-4" />
+                {language === 'ar' ? 'إجراءات سريعة' : 'Actions Rapides'}
+                <ChevronDown className="w-4 h-4 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56" sideOffset={8}>
+              {/* Appointments */}
+              <DropdownMenuItem
+                className="gap-3 cursor-pointer py-2.5"
+                onClick={() => onNavigate('appointments')}
+              >
+                <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center flex-shrink-0">
+                  <CalendarPlus className="w-4 h-4 text-rose-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">{language === 'ar' ? 'موعد جديد' : 'Nouveau RDV'}</p>
+                  <p className="text-xs text-slate-400">{language === 'ar' ? 'إضافة حجز' : 'Ajouter un rendez-vous'}</p>
+                </div>
+              </DropdownMenuItem>
+
+              {/* New Client */}
+              <DropdownMenuItem
+                className="gap-3 cursor-pointer py-2.5"
+                onClick={() => onNavigate('clients')}
+              >
+                <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                  <UserPlus className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">{language === 'ar' ? 'زبون جديد' : 'Nouveau Client'}</p>
+                  <p className="text-xs text-slate-400">{language === 'ar' ? 'تسجيل زبون' : 'Enregistrer un client'}</p>
+                </div>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* POS Sale */}
+              <DropdownMenuItem
+                className="gap-3 cursor-pointer py-2.5"
+                onClick={() => onNavigate('pos')}
+              >
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+                  <ShoppingBag className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">{language === 'ar' ? 'بيع سريع' : 'Vente POS'}</p>
+                  <p className="text-xs text-slate-400">{language === 'ar' ? 'فتح نقطة البيع' : 'Ouvrir la caisse'}</p>
+                </div>
+              </DropdownMenuItem>
+
+              {/* New Service */}
+              <DropdownMenuItem
+                className="gap-3 cursor-pointer py-2.5"
+                onClick={() => onNavigate('services')}
+              >
+                <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
+                  <Scissors className="w-4 h-4 text-purple-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">{language === 'ar' ? 'خدمة جديدة' : 'Nouveau Service'}</p>
+                  <p className="text-xs text-slate-400">{language === 'ar' ? 'إضافة خدمة' : 'Ajouter un service'}</p>
+                </div>
+              </DropdownMenuItem>
+
+              {/* Purchase / Inventory */}
+              <DropdownMenuItem
+                className="gap-3 cursor-pointer py-2.5"
+                onClick={() => onNavigate('inventory')}
+              >
+                <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                  <Package className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">{language === 'ar' ? 'شراء جديد' : 'Nouvel Achat'}</p>
+                  <p className="text-xs text-slate-400">{language === 'ar' ? 'إضافة مشتريات' : 'Ajouter au stock'}</p>
+                </div>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* Reports */}
+              <DropdownMenuItem
+                className="gap-3 cursor-pointer py-2.5"
+                onClick={() => onNavigate('reports')}
+              >
+                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                  <FileBarChart className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">{language === 'ar' ? 'التقارير' : 'Rapports'}</p>
+                  <p className="text-xs text-slate-400">{language === 'ar' ? 'عرض الإحصائيات' : 'Voir les statistiques'}</p>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

@@ -95,8 +95,7 @@ export default function Inventory({ t, language }: InventoryProps) {
   const [loading, setLoading] = useState(true);
 
   // New Product Form State
-  const [newByNameAr, setNewByNameAr] = useState('');
-  const [newByNameFr, setNewByNameFr] = useState('');
+  const [newByName, setNewByName] = useState('');
   const [newQuantity, setNewQuantity] = useState(0);
   const [newPrice, setNewPrice] = useState(0);
   const [newCategory, setNewCategory] = useState('hair');
@@ -236,21 +235,20 @@ export default function Inventory({ t, language }: InventoryProps) {
 
   const handleAddBatchItem = () => {
     if (itemMode === 'new') {
-      if (!newByNameAr || !newByNameFr || newQuantity <= 0 || newPrice <= 0) {
+      if (!newByName || newQuantity <= 0 || newPrice <= 0) {
         alert("Please fill all item fields");
         return;
       }
       setNewOrderItems([...newOrderItems, {
-        nameAr: newByNameAr,
-        nameFr: newByNameFr,
+        nameAr: newByName,
+        nameFr: newByName,
         category: newCategory,
         quantity: newQuantity,
         unitPrice: newPrice,
         isNew: true
       }]);
       // Reset item inputs
-      setNewByNameAr('');
-      setNewByNameFr('');
+      setNewByName('');
       setNewQuantity(0);
       setNewPrice(0);
       setNewCategory('hair');
@@ -774,9 +772,12 @@ export default function Inventory({ t, language }: InventoryProps) {
               {itemMode === 'new' ? (
                 <>
                   <h4 className="font-semibold text-sm">{language === 'ar' ? 'بيانات المنتج الجديد' : 'Détails du nouveau produit'}</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Input placeholder={language === 'ar' ? 'الاسم (عربي)' : 'Nom (Arabe)'} value={newByNameAr} onChange={(e) => setNewByNameAr(e.target.value)} />
-                    <Input placeholder={language === 'ar' ? 'الاسم (فرنسي)' : 'Nom (Français)'} value={newByNameFr} onChange={(e) => setNewByNameFr(e.target.value)} />
+                  <div className="space-y-2">
+                    <Input
+                      placeholder={language === 'ar' ? 'اسم المنتج' : 'Nom du produit'}
+                      value={newByName}
+                      onChange={(e) => setNewByName(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <select

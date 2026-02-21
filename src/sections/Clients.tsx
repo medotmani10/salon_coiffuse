@@ -118,10 +118,21 @@ export default function Clients({ t, language }: ClientsProps) {
   const handleAnalyze = async () => {
     if (!selectedClient) return;
     setAnalyzing(true);
-    setInsights([]); // Reset previous insights
+    setInsights([]);
     try {
-      const results = await amina.analyzeClient(selectedClient);
-      setInsights(results);
+      const responseText = await amina.analyzeClient({
+        first_name: selectedClient.firstName,
+        last_name: selectedClient.lastName,
+        total_visits: selectedClient.visitCount,
+        total_spent: selectedClient.totalSpent,
+        last_visit: selectedClient.lastVisit?.toISOString().split('T')[0]
+      });
+      // Wrap string response into AiInsight shape for the existing UI
+      setInsights([{
+        type: 'recommendation',
+        message: responseText,
+        confidence: 0.9
+      }]);
     } catch (err) {
       console.error('AI Analysis failed', err);
     } finally {
