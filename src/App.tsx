@@ -2,39 +2,19 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 import {
-  LayoutDashboard,
-  ShoppingCart,
-  Calendar,
-  Users,
-  Sparkles,
-  UserCircle,
-  BarChart3,
-  Settings,
-  Package,
-  Bell,
-  Search,
-  Menu,
-  X,
-  Sun,
-  Moon,
-  Globe
+  LayoutDashboard, ShoppingCart, Calendar, Users, Sparkles, UserCircle,
+  BarChart3, Settings, Package, Search, Menu, X, Sun, Moon, Globe
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { LogOut } from 'lucide-react';
 import Login from '@/sections/Login';
-import type { Language, Alert } from '@/types';
+import type { Language } from '@/types';
 import { api } from '@/services/api';
-import { aiUtils } from '@/services/ai';
+
 import { translations } from '@/i18n/translations';
 import Dashboard from '@/sections/Dashboard';
 import POS from '@/sections/POS';
@@ -46,6 +26,7 @@ import Inventory from '@/sections/Inventory';
 import Reports from '@/sections/Reports';
 import SettingsPanel from '@/sections/Settings';
 import PublicBooking from '@/sections/PublicBooking';
+import { useTheme } from '@/providers/ThemeProvider'; // محرك الثيمات
 import './App.css';
 
 type View = 'dashboard' | 'pos' | 'appointments' | 'clients' | 'services' | 'staff' | 'inventory' | 'reports' | 'settings';
@@ -57,32 +38,18 @@ function CRMApp() {
   const [language, setLanguage] = useState<Language>('fr');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
-  const [notifications, setNotifications] = useState<Alert[]>([]);
-  const [notifOpen, setNotifOpen] = useState(false);
 
-  useEffect(() => {
-    aiUtils.getSmartAlerts().then(setNotifications).catch(() => { });
-  }, []);
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  // استدعاء محرك الثيمات للتجربة المباشرة
+  const { theme } = useTheme();
 
-  const markAllRead = () =>
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
 
-  const handleNotifClick = (alert: Alert) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === alert.id ? { ...n, isRead: true } : n)
-    );
-    if (alert.type === 'appointment') setCurrentView('appointments');
-    else if (alert.type === 'stock') setCurrentView('inventory');
-    setNotifOpen(false);
-  };
 
   const t = translations[language];
   const isRTL = language === 'ar';
 
   const [storeSettings, setStoreSettings] = useState({
-    name: 'ZenStyle',
+    name: theme.appName, // ربط الاسم بالثيم
     logo_url: ''
   });
   const [user, setUser] = useState<any>(null);
@@ -90,13 +57,11 @@ function CRMApp() {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setAuthLoading(false);
     });
 
-    // Listen for changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -127,7 +92,7 @@ function CRMApp() {
     const { data } = await api.settings.getStoreSettings();
     if (data) {
       setStoreSettings({
-        name: data.name || 'ZenStyle',
+        name: data.name || theme.appName,
         logo_url: data.logo_url || ''
       });
       if (data.name) document.title = data.name;
@@ -152,7 +117,6 @@ function CRMApp() {
     if (!user) return true;
     if (user.role === 'admin') return true;
 
-    // Explicitly type the permissions object
     const permissions: Record<string, string[]> = {
       manager: ['dashboard', 'pos', 'appointments', 'clients', 'services', 'staff', 'inventory', 'reports'],
       receptionist: ['dashboard', 'pos', 'appointments', 'clients'],
@@ -165,35 +129,23 @@ function CRMApp() {
 
   const renderView = () => {
     switch (currentView) {
-      case 'dashboard':
-        return <Dashboard t={t} language={language} onNavigate={setCurrentView} />;
-      case 'pos':
-        return <POS t={t} language={language} />;
-      case 'appointments':
-        return <Appointments t={t} language={language} />;
-      case 'clients':
-        return <Clients t={t} language={language} />;
-      case 'services':
-        return <Services t={t} language={language} />;
-      case 'staff':
-        return <Staff t={t} language={language} />;
-      case 'inventory':
-        return <Inventory t={t} language={language} />;
-      case 'reports':
-        return <Reports t={t} language={language} />;
-      case 'settings':
-        return <SettingsPanel t={t} language={language} onLanguageChange={setLanguage} onSettingsChange={loadStoreSettings} />;
-      default:
-        return <Dashboard t={t} language={language} onNavigate={setCurrentView} />;
+      case 'dashboard': return <Dashboard t={t} language={language} onNavigate={setCurrentView} />;
+      case 'pos': return <POS t={t} language={language} />;
+      case 'appointments': return <Appointments t={t} language={language} />;
+      case 'clients': return <Clients t={t} language={language} />;
+      case 'services': return <Services t={t} language={language} />;
+      case 'staff': return <Staff t={t} language={language} />;
+      case 'inventory': return <Inventory t={t} language={language} />;
+      case 'reports': return <Reports t={t} language={language} />;
+      case 'settings': return <SettingsPanel t={t} language={language} onLanguageChange={setLanguage} onSettingsChange={loadStoreSettings} />;
+      default: return <Dashboard t={t} language={language} onNavigate={setCurrentView} />;
     }
   };
 
-
-
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-rose-50 dark:bg-slate-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-brand-50 dark:bg-slate-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600"></div>
       </div>
     );
   }
@@ -204,18 +156,19 @@ function CRMApp() {
 
   return (
     <div className={`min-h-screen ${darkMode ? 'dark' : ''}`}>
-      <div className="flex h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 transition-colors duration-300">
+      <div className="flex h-screen bg-brand-50 dark:bg-slate-900 transition-colors duration-500">
+
         {/* Sidebar */}
         <aside
           className={`${sidebarOpen ? 'w-64' : 'w-20'} ${isRTL ? 'border-l' : 'border-r'} 
-            border-rose-200/50 dark:border-slate-700/50 
+            border-brand-200/50 dark:border-slate-700/50 
             bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl 
             transition-all duration-300 ease-in-out hidden md:flex flex-col`}
         >
           {/* Logo */}
           <div className={`h-20 flex items-center ${sidebarOpen ? 'px-6' : 'px-4'} ${isRTL ? 'justify-end' : 'justify-start'}`}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-400 to-pink-600 flex items-center justify-center shadow-lg shadow-rose-200 dark:shadow-rose-900/30 overflow-hidden">
+              <div className="w-10 h-10 rounded-xl bg-brand-500 flex items-center justify-center shadow-lg shadow-brand-200 dark:shadow-brand-900/30 overflow-hidden transition-colors duration-500">
                 {storeSettings.logo_url ? (
                   <img src={storeSettings.logo_url} alt="Logo" className="w-full h-full object-cover" />
                 ) : (
@@ -224,11 +177,11 @@ function CRMApp() {
               </div>
               {sidebarOpen && (
                 <div className={`${isRTL ? 'text-right' : 'text-left'}`}>
-                  <h1 className="text-xl font-bold bg-gradient-to-r from-rose-600 to-pink-600 bg-clip-text text-transparent truncate max-w-[150px]">
-                    {storeSettings.name}
+                  <h1 className="text-xl font-bold text-slate-800 dark:text-white truncate max-w-[150px]">
+                    {theme.appName}
                   </h1>
-                  <p className="text-xs text-rose-400 dark:text-rose-300">
-                    {t.salonManagement}
+                  <p className="text-xs text-brand-500 dark:text-brand-400 font-medium">
+                    {language === 'ar' ? 'إدارة الأعمال' : 'Business CRM'}
                   </p>
                 </div>
               )}
@@ -247,8 +200,8 @@ function CRMApp() {
                   className={`w-full flex items-center ${isRTL ? 'flex-row-reverse' : 'flex-row'} 
                     gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
                     ${isActive
-                      ? 'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-200 dark:shadow-rose-900/30'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-rose-50 dark:hover:bg-slate-700/50 hover:text-rose-600 dark:hover:text-rose-400'
+                      ? 'bg-brand-500 text-white shadow-lg shadow-brand-200 dark:shadow-brand-900/30'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-brand-50 dark:hover:bg-slate-700/50 hover:text-brand-600 dark:hover:text-brand-400'
                     }`}
                 >
                   <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
@@ -261,12 +214,12 @@ function CRMApp() {
           </nav>
 
           {/* Sidebar Footer */}
-          <div className="p-4 border-t border-rose-200/50 dark:border-slate-700/50">
+          <div className="p-4 border-t border-brand-200/50 dark:border-slate-700/50">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className={`w-full flex items-center ${isRTL ? 'flex-row-reverse' : 'flex-row'} 
                 justify-center gap-2 p-2 rounded-lg text-slate-500 dark:text-slate-400 
-                hover:bg-rose-50 dark:hover:bg-slate-700/50 transition-colors`}
+                hover:bg-brand-50 dark:hover:bg-slate-700/50 transition-colors`}
             >
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -277,11 +230,11 @@ function CRMApp() {
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* Header */}
           <header className="h-16 md:h-20 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl 
-            border-b border-rose-200/50 dark:border-slate-700/50 
+            border-b border-brand-200/50 dark:border-slate-700/50 
             flex items-center justify-between px-4 md:px-6 z-10">
-            {/* Mobile Logo (Visible only on mobile) */}
+            {/* Mobile Logo */}
             <div className="md:hidden flex items-center gap-2 mr-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-400 to-pink-600 flex items-center justify-center shadow-lg shadow-rose-200 dark:shadow-rose-900/30 overflow-hidden">
+              <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center shadow-lg shadow-brand-200 dark:shadow-brand-900/30 overflow-hidden">
                 {storeSettings.logo_url ? (
                   <img src={storeSettings.logo_url} alt="Logo" className="w-full h-full object-cover" />
                 ) : (
@@ -297,27 +250,29 @@ function CRMApp() {
                   ${isRTL ? 'right-3' : 'left-3'}`} />
                 <Input
                   placeholder={t.search}
-                  className={`${isRTL ? 'pr-10' : 'pl-10'} w-full bg-rose-50/50 dark:bg-slate-700/50 
-                    border-rose-200 dark:border-slate-600 focus:border-rose-400 dark:focus:border-rose-500
+                  className={`${isRTL ? 'pr-10' : 'pl-10'} w-full bg-brand-50/50 dark:bg-slate-700/50 
+                    border-brand-200 dark:border-slate-600 focus:border-brand-400 dark:focus:border-brand-500
                     rounded-xl h-9 md:h-10 text-sm`}
                 />
               </div>
             </div>
 
+
             {/* Right Actions */}
             <div className={`flex items-center gap-2 md:gap-3 ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
+
               {/* Language Toggle */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-xl hover:bg-rose-50 dark:hover:bg-slate-700 h-9 w-9 md:h-10 md:w-10">
+                  <Button variant="ghost" size="icon" className="rounded-xl hover:bg-brand-50 dark:hover:bg-slate-700 h-9 w-9 md:h-10 md:w-10">
                     <Globe className="w-4 h-4 md:w-5 md:h-5 text-slate-600 dark:text-slate-400" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[120px]">
-                  <DropdownMenuItem onClick={() => setLanguage('ar')} className={language === 'ar' ? 'bg-rose-50 dark:bg-slate-700' : ''}>
+                  <DropdownMenuItem onClick={() => setLanguage('ar')} className={language === 'ar' ? 'bg-brand-50 dark:bg-slate-700' : ''}>
                     <span className="ml-2">العربية</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setLanguage('fr')} className={language === 'fr' ? 'bg-rose-50 dark:bg-slate-700' : ''}>
+                  <DropdownMenuItem onClick={() => setLanguage('fr')} className={language === 'fr' ? 'bg-brand-50 dark:bg-slate-700' : ''}>
                     <span>Français</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -328,7 +283,7 @@ function CRMApp() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setDarkMode(!darkMode)}
-                className="rounded-xl hover:bg-rose-50 dark:hover:bg-slate-700 h-9 w-9 md:h-10 md:w-10"
+                className="rounded-xl hover:bg-brand-50 dark:hover:bg-slate-700 h-9 w-9 md:h-10 md:w-10"
               >
                 {darkMode ? (
                   <Sun className="w-4 h-4 md:w-5 md:h-5 text-amber-500" />
@@ -337,96 +292,12 @@ function CRMApp() {
                 )}
               </Button>
 
-              {/* Notifications */}
-              <DropdownMenu open={notifOpen} onOpenChange={setNotifOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-xl hover:bg-rose-50 dark:hover:bg-slate-700 relative h-9 w-9 md:h-10 md:w-10"
-                  >
-                    <Bell className="w-4 h-4 md:w-5 md:h-5 text-slate-600 dark:text-slate-400" />
-                    {unreadCount > 0 && (
-                      <Badge className="absolute -top-1 -right-1 w-4 h-4 md:w-5 md:h-5 p-0 flex items-center justify-center
-                        bg-rose-500 text-white text-[10px] md:text-xs">
-                        {unreadCount}
-                      </Badge>
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 p-0" sideOffset={8}>
-                  {/* Header */}
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-                    <span className="font-semibold text-sm">
-                      {language === 'ar' ? 'الإشعارات' : 'Notifications'}
-                      {unreadCount > 0 && (
-                        <Badge className="ml-2 bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 text-xs">
-                          {unreadCount}
-                        </Badge>
-                      )}
-                    </span>
-                    {unreadCount > 0 && (
-                      <button
-                        onClick={markAllRead}
-                        className="text-xs text-rose-500 hover:text-rose-700 font-medium"
-                      >
-                        {language === 'ar' ? 'قراءة الكل' : 'Tout lire'}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Alerts List */}
-                  <ScrollArea className="max-h-80">
-                    {notifications.length === 0 ? (
-                      <div className="py-8 text-center text-sm text-slate-400">
-                        <Bell className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                        {language === 'ar' ? 'لا توجد إشعارات' : 'Aucune notification'}
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-100 dark:divide-slate-700">
-                        {notifications.map(alert => (
-                          <button
-                            key={alert.id}
-                            className={`w-full text-left px-4 py-3 hover:bg-rose-50 dark:hover:bg-slate-700/50 transition-colors ${!alert.isRead ? 'bg-rose-50/50 dark:bg-slate-700/30' : ''
-                              }`}
-                            onClick={() => handleNotifClick(alert)}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${alert.severity === 'error' ? 'bg-red-500' :
-                                alert.severity === 'warning' ? 'bg-amber-500' : 'bg-violet-500'
-                                }`} />
-                              <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-medium ${!alert.isRead ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'
-                                  }`}>
-                                  {language === 'ar' ? alert.titleAr : alert.titleFr}
-                                </p>
-                                <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">
-                                  {language === 'ar' ? alert.messageAr : alert.messageFr}
-                                </p>
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </ScrollArea>
-
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-center justify-center text-xs text-slate-500 cursor-pointer"
-                    onClick={() => { setCurrentView('dashboard'); setNotifOpen(false); }}
-                  >
-                    {language === 'ar' ? 'عرض كل التنبيهات في اللوحة' : 'Voir tout dans le tableau de bord'}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
               {/* User Profile */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-9 w-9 md:h-10 md:w-10 rounded-full hover:bg-rose-50 dark:hover:bg-slate-700 p-0">
-                    <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-gradient-to-br from-rose-400 to-pink-500
-                      flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-rose-200 dark:shadow-rose-900/30 overflow-hidden ring-2 ring-white dark:ring-slate-700">
+                  <Button variant="ghost" className="relative h-9 w-9 md:h-10 md:w-10 rounded-full hover:bg-brand-50 dark:hover:bg-slate-700 p-0">
+                    <div className="h-9 w-9 md:h-10 md:w-10 rounded-full bg-brand-500
+                        flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-brand-200 dark:shadow-brand-900/30 overflow-hidden ring-2 ring-white dark:ring-slate-700 transition-colors duration-500">
                       {user?.avatar ? (
                         <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
                       ) : (
@@ -436,54 +307,10 @@ function CRMApp() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64 p-0" sideOffset={8}>
-                  {/* Profile Card Header */}
-                  <div className="p-4 bg-gradient-to-br from-rose-50 to-pink-50 dark:from-slate-700 dark:to-slate-700 rounded-t-md">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-rose-400 to-pink-500
-                        flex items-center justify-center text-white font-bold text-lg shadow-md overflow-hidden ring-2 ring-white dark:ring-slate-600 flex-shrink-0">
-                        {user?.avatar ? (
-                          <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
-                        ) : (
-                          (user?.name?.charAt(0) || 'U').toUpperCase()
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">
-                          {user?.name || (language === 'ar' ? 'مستخدم' : 'Utilisateur')}
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                          {user?.email || ''}
-                        </p>
-                        <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-medium
-                          bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">
-                          {user?.role === 'admin' ? (language === 'ar' ? 'مدير' : 'Admin') :
-                            user?.role === 'manager' ? (language === 'ar' ? 'مسؤول' : 'Manager') :
-                              user?.role === 'receptionist' ? (language === 'ar' ? 'استقبال' : 'Réceptionniste') :
-                                user?.role === 'staff' ? (language === 'ar' ? 'موظف' : 'Employé') :
-                                  (language === 'ar' ? 'مستخدم' : 'Utilisateur')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <DropdownMenuSeparator className="my-0" />
-
-                  {/* Actions */}
                   <div className="p-1">
                     <DropdownMenuItem
-                      onClick={() => setCurrentView('settings')}
-                      className="gap-2 cursor-pointer rounded-lg"
-                    >
-                      <Settings className="w-4 h-4 text-slate-500" />
-                      <span>{language === 'ar' ? 'الإعدادات' : 'Paramètres'}</span>
-                    </DropdownMenuItem>
-
-                    <DropdownMenuSeparator className="my-1" />
-
-                    <DropdownMenuItem
                       onClick={() => { supabase.auth.signOut(); setSession(null); }}
-                      className="gap-2 cursor-pointer rounded-lg text-red-600 dark:text-red-400
-                        focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
+                      className="gap-2 cursor-pointer rounded-lg text-red-600 dark:text-red-400"
                     >
                       <LogOut className="w-4 h-4" />
                       <span>{language === 'ar' ? 'تسجيل الخروج' : 'Se déconnecter'}</span>
@@ -495,60 +322,12 @@ function CRMApp() {
           </header>
 
           {/* Content Area */}
-          <main className="flex-1 overflow-auto p-2 md:p-6 pb-20 md:pb-6">
+          <main className="flex-1 overflow-auto p-2 md:p-6 pb-20 md:pb-6 transition-colors duration-500">
             <div className="max-w-7xl mx-auto">
               {renderView()}
             </div>
           </main>
 
-          {/* Mobile Bottom Navigation */}
-          <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl 
-            border-t border-rose-200/50 dark:border-slate-700/50 z-50 flex items-center justify-around px-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-            {navItems.slice(0, 4).map((item) => {
-              const Icon = item.icon;
-              const isActive = currentView === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setCurrentView(item.id)}
-                  className={`flex flex-col items-center justify-center w-full h-full gap-1 
-                    transition-all duration-200 
-                    ${isActive ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400 hover:text-rose-500'}`}
-                >
-                  <Icon className={`w-6 h-6 ${isActive ? 'scale-110' : ''} transition-transform`} />
-                  <span className="text-[10px] font-medium truncate w-full text-center px-1">
-                    {item.label}
-                  </span>
-                </button>
-              );
-            })}
-
-            {/* More Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex flex-col items-center justify-center w-full h-full gap-1 text-slate-500 dark:text-slate-400 hover:text-rose-500 transition-colors">
-                  <Menu className="w-6 h-6" />
-                  <span className="text-[10px] font-medium">{language === 'ar' ? 'المزيد' : 'Menu'}</span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align={isRTL ? "start" : "end"} side="top" className="w-56 mb-2">
-                {navItems.slice(4).map((item) => {
-                  const Icon = item.icon;
-                  const isActive = currentView === item.id;
-                  return (
-                    <DropdownMenuItem
-                      key={item.id}
-                      onClick={() => setCurrentView(item.id)}
-                      className={`gap-2 p-3 cursor-pointer ${isActive ? 'bg-rose-50 dark:bg-slate-700 text-rose-600' : ''}`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span>{item.label}</span>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </nav>
         </div>
       </div>
       <ChatWidget />

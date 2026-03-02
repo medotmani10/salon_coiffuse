@@ -98,7 +98,7 @@ export default function Reports({ t, language }: ReportsProps) {
 
   const handleExportCSV = () => {
     let cvsContent = "data:text/csv;charset=utf-8,\uFEFF";
-    let filename = `report_${activeTab}_${new Date().toISOString().split('T')[0]}.csv`;
+    let filename = `report_${activeTab}_${new Date().toLocaleDateString('en-CA')}.csv`;
 
     if (activeTab === 'financial' && financialData) {
       cvsContent += "Mois,Revenus,Dépenses,Profit\n";
@@ -152,7 +152,11 @@ export default function Reports({ t, language }: ReportsProps) {
   const totalRevenue = financialData?.totalRevenue || 0;
   const totalExpenses = financialData?.totalExpenses || 0;
   const totalProfit = financialData?.totalProfit || 0;
-  const profitMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : '0.0';
+  const profitMargin = financialData?.profitMargin ?? (totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : '0.0');
+  const hasRealExpenses = totalExpenses > 0;
+  const expensesLabel = hasRealExpenses
+    ? (language === 'ar' ? 'إجمالي المصروفات' : 'Dépenses Réelles')
+    : (language === 'ar' ? 'إجمالي المصروفات (تقديري)' : 'Dépenses (Est.)');
   const monthlyRevenue = financialData?.monthlyRevenue || [];
 
   return (
@@ -215,11 +219,11 @@ export default function Reports({ t, language }: ReportsProps) {
           <CardContent className="p-5">
             <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
               <div>
-                <p className="text-rose-100 text-sm">{language === 'ar' ? 'إجمالي المصروفات' : 'Dépenses (Est.)'}</p>
+                <p className="text-rose-100 text-sm">{expensesLabel}</p>
                 <p className="text-2xl font-bold">{(totalExpenses).toLocaleString()} DZD</p>
                 <div className={`flex items-center gap-1 mt-1 ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
                   <TrendingDown className="w-4 h-4" />
-                  <span className="text-sm">~60%</span>
+                  <span className="text-sm">{totalRevenue > 0 ? ((totalExpenses / totalRevenue) * 100).toFixed(1) : '0'}%</span>
                 </div>
               </div>
               <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
@@ -233,11 +237,11 @@ export default function Reports({ t, language }: ReportsProps) {
           <CardContent className="p-5">
             <div className={`flex items-center justify-between ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
               <div>
-                <p className="text-blue-100 text-sm">{language === 'ar' ? 'صافي الربح' : 'Profit Net (Est.)'}</p>
+                <p className="text-blue-100 text-sm">{language === 'ar' ? 'صافي الربح' : 'Profit Net'}</p>
                 <p className="text-2xl font-bold">{(totalProfit).toLocaleString()} DZD</p>
                 <div className={`flex items-center gap-1 mt-1 ${isRTL ? 'flex-row-reverse' : 'flex-row'}`}>
                   <TrendingUp className="w-4 h-4" />
-                  <span className="text-sm">~40%</span>
+                  <span className="text-sm">{profitMargin}%</span>
                 </div>
               </div>
               <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
@@ -439,7 +443,9 @@ export default function Reports({ t, language }: ReportsProps) {
             <CardContent>
               <div className="space-y-4">
                 {inventoryData.map((item) => {
-                  const percentage = item.minStock > 0 ? (item.stock / (item.minStock * 3)) * 100 : 50;
+                  // Max bar = 2× minStock (clearer: at minStock = yellow, above = green)
+                  const maxBar = Math.max(item.minStock * 2, item.stock + 1);
+                  const percentage = Math.min((item.stock / maxBar) * 100, 100);
                   const isLow = item.stock <= item.minStock;
                   return (
                     <div key={item.name} className="space-y-2">

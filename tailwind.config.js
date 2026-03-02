@@ -5,6 +5,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // --- 1. ألوان نظام Shadcn/UI الأساسية (للحفاظ على استقرار الواجهة) ---
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -48,6 +49,15 @@ module.exports = {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+
+        // --- 2. 🌟 الإضافة الاستراتيجية: ألوان الثيم الديناميكي (SaaS Theming) ---
+        brand: {
+          50: 'var(--brand-50)',
+          100: 'var(--brand-100)',
+          500: 'var(--brand-500)',
+          600: 'var(--brand-600)',
+          900: 'var(--brand-900)',
+        }
       },
       borderRadius: {
         xl: "calc(var(--radius) + 4px)",
@@ -78,6 +88,10 @@ module.exports = {
         "accordion-up": "accordion-up 0.2s ease-out",
         "caret-blink": "caret-blink 1.25s ease-out infinite",
       },
+      // --- 3. إضافة الخط العربي الافتراضي للنظام ---
+      fontFamily: {
+        sans: ['Tajawal', 'sans-serif'],
+      }
     },
   },
   plugins: [require("tailwindcss-animate")],
