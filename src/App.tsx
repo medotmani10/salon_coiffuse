@@ -38,6 +38,7 @@ function CRMApp() {
   const [language, setLanguage] = useState<Language>('fr');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
 
   // استدعاء محرك الثيمات للتجربة المباشرة
@@ -163,7 +164,10 @@ function CRMApp() {
           className={`${sidebarOpen ? 'w-64' : 'w-20'} ${isRTL ? 'border-l' : 'border-r'} 
             border-brand-200/50 dark:border-slate-700/50 
             bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl 
-            transition-all duration-300 ease-in-out hidden md:flex flex-col`}
+            transition-all duration-300 ease-in-out 
+            fixed md:relative inset-y-0 ${isRTL ? 'right-0' : 'left-0'} z-50 md:z-0
+            ${isMobileMenuOpen ? 'translate-x-0' : isRTL ? 'translate-x-full md:translate-x-0' : '-translate-x-full md:translate-x-0'}
+            flex flex-col`}
         >
           {/* Logo */}
           <div className={`h-20 flex items-center ${sidebarOpen ? 'px-6' : 'px-4'} ${isRTL ? 'justify-end' : 'justify-start'}`}>
@@ -196,7 +200,7 @@ function CRMApp() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setCurrentView(item.id)}
+                  onClick={() => { setCurrentView(item.id); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center ${isRTL ? 'flex-row-reverse' : 'flex-row'} 
                     gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
                     ${isActive
@@ -232,8 +236,16 @@ function CRMApp() {
           <header className="h-16 md:h-20 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl 
             border-b border-brand-200/50 dark:border-slate-700/50 
             flex items-center justify-between px-4 md:px-6 z-10">
-            {/* Mobile Logo */}
-            <div className="md:hidden flex items-center gap-2 mr-2">
+            {/* Mobile Toggle & Logo */}
+            <div className="md:hidden flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="h-10 w-10 text-slate-600 dark:text-slate-400"
+              >
+                <Menu className="w-6 h-6" />
+              </Button>
               <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center shadow-lg shadow-brand-200 dark:shadow-brand-900/30 overflow-hidden">
                 {storeSettings.logo_url ? (
                   <img src={storeSettings.logo_url} alt="Logo" className="w-full h-full object-cover" />
@@ -329,6 +341,14 @@ function CRMApp() {
           </main>
 
         </div>
+
+        {/* Mobile Sidebar Backdrop */}
+        {isMobileMenuOpen && (
+          <div
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
       </div>
       <ChatWidget />
     </div>
